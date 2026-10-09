@@ -105,7 +105,7 @@
   </label>
 </div>
 <p class="muted hint">
-  La búsqueda automática nunca sustituye un logo subido a mano. Si un escudo no aparece, súbelo o pega el enlace de la imagen (PNG, JPG o WebP).
+  El botón vuelve a buscar los que faltan y rehace los que vinieron de la FVCL; nunca toca un logo subido a mano. Si un escudo no aparece o sale mal, súbelo o pega el enlace de la imagen (PNG, JPG o WebP).
 </p>
 
 {#if loading}

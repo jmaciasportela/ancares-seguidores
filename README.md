@@ -33,6 +33,19 @@ npm run build      # genera frontend/dist, que el backend sirve en http://localh
 
 El panel de admin está en `/#/admin` y no aparece en el menú.
 
+### Versión de la PWA
+
+Cada commit sube automáticamente la versión *patch* de `frontend/package.json` (1.0.0 → 1.0.1). Lo hace el hook `.githooks/pre-commit`, que se activa una vez por cada clon del repositorio:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Una versión nueva cambia el service worker, y los móviles que tienen la app instalada la descargan solos. La app recarga al momento si se acaba de abrir; si no, espera a que el usuario vuelva a ella, y avisa con «App actualizada a la versión X». La versión se ve al pie de la pestaña *Club*.
+
+- Para un salto mayor: `python3 scripts/bump_version.py minor` (o `major`) antes del commit.
+- Para saltarse la subida en un commit concreto: `SKIP_BUMP=1 git commit …`.
+
 ## Despliegue (VPS con Nginx Proxy Manager)
 
 1. Apunta un dominio, o subdominio, a la IP del VPS.
@@ -66,7 +79,7 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
    - **Android (con la app instalada):** abre el enlace, descarga el Excel y pulsa *Compartir → Ancares*. Se sube solo.
    - **iPhone u ordenador:** descarga los Excel y pulsa *Subir Excel* en la categoría.
 5. **Equipos y logos.** La pestaña *Equipos* lista todos los equipos de las clasificaciones, y hay dos formas de ponerles escudo:
-   - **Automática:** el botón *Buscar logos en la FVCL* abre la página de clasificación de cada categoría (la URL del Excel sin `/export-xls`) y busca la imagen asociada a cada nombre de equipo. También se hace sola en la sincronización diaria, como mucho una vez por semana para cada equipo sin logo.
+   - **Automática:** el botón *Buscar logos en la FVCL* abre la página de clasificación de cada categoría (la URL del Excel sin `/export-xls`), busca la imagen asociada a cada nombre de equipo y rehace los logos que ya vinieron de la FVCL. También se hace sola en la sincronización diaria, como mucho una vez por semana para cada equipo sin logo. Las miniaturas pequeñas se amplían para llenar el escudo y las de menos de 16 px se descartan.
    - **Manual:** con *Subir* o *Enlace* (PNG, JPG o WebP). Un logo puesto a mano nunca lo sustituye la búsqueda automática.
 
    Las imágenes se convierten a WebP de 160 px y se guardan en `data/logos/`. Los equipos sin logo muestran sus iniciales.

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Sube la versión de la PWA en cada commit para que los móviles se actualicen.
+# Para saltarlo puntualmente: SKIP_BUMP=1 git commit ...
+[ -n "$SKIP_BUMP" ] && exit 0
+root=$(git rev-parse --show-toplevel) || exit 1
+version=$(python3 "$root/scripts/bump_version.py") || exit 1
+git add "$root/frontend/package.json" "$root/frontend/package-lock.json" || exit 1
+echo "Versión de la PWA: $version"

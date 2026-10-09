@@ -9,8 +9,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import timedelta
 from html.parser import HTMLParser
-from typing import Dict, Iterable, List, Optional
-from urllib.parse import urljoin
+from typing import Dict, Iterable, List, Optional, Tuple
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import httpx
 from sqlalchemy import select
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from ..models import Category, Team, utcnow
 from ..parsers.common import norm
 from .fetcher import fetch_html
-from .logos import LogoError, download_image, ensure_teams, save_logo
+from .logos import LogoError, download_image, ensure_teams, image_size, save_logo
 
 log = logging.getLogger(__name__)
 RECHECK_AFTER = timedelta(days=7)
@@ -31,6 +31,44 @@ class _Img:
     src: str
     labels: List[str] = field(default_factory=list)
     after: str = ""
+
+
+def largest_in_srcset(srcset: Optional[str]) -> Optional[str]:
+    """'a.png 1x, b.png 2x' / 'a.png 60w, b.png 240w' -> la candidata más grande."""
+    best, best_size = None, -1.0
+    for part in (srcset or "").split(","):
+        bits = part.strip().split()
+        if not bits or bits[0].startswith("data:"):
+            continue
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)([wx])", bits[1]) if len(bits) > 1 else None
+        size = float(m.group(1)) * (1 if m and m.group(2) == "w" else 100) if m else 100
+        if size > best_size:
+            best, best_size = bits[0], size
+    return best
+
+
+SIZE_IN_PATH = re.compile(r"(?<![\d])(\d{2,3})x(\d{2,3})(?![\d])")
+SIZE_PARAMS = ("w", "width", "h", "height", "size", "s")
+
+
+def bigger_variants(url: str) -> List[str]:
+    """Versiones más grandes de una miniatura, de mayor a menor (sin la original).
+
+    Cubre los patrones habituales de CDN: tamaño en la ruta ("logo.60x60.png",
+    "/60x60/logo.png") o en la query (?w=60, ?width=60, ?size=small).
+    """
+    parts = urlsplit(url)
+    variants: List[str] = []
+    for size in (512, 256):
+        path = parts.path
+        if SIZE_IN_PATH.search(path):
+            path = SIZE_IN_PATH.sub(f"{size}x{size}", path)
+        query = parse_qsl(parts.query, keep_blank_values=True)
+        query = [(k, str(size) if k.lower() in SIZE_PARAMS and v.isdigit() else ("large" if k.lower() == "size" else v)) for k, v in query]
+        candidate = urlunsplit(parts._replace(path=path, query=urlencode(query)))
+        if candidate != url and candidate not in variants:
+            variants.append(candidate)
+    return variants
 
 
 class _ImgCollector(HTMLParser):
@@ -47,7 +85,7 @@ class _ImgCollector(HTMLParser):
         elif tag == "a":
             self.links.append([v for v in (a.get("title"), a.get("aria-label")) if v])
         elif tag == "img":
-            src = a.get("data-src") or a.get("src") or (a.get("srcset") or "").split(" ")[0]
+            src = largest_in_srcset(a.get("data-srcset") or a.get("srcset")) or a.get("data-src") or a.get("src")
             if src and not src.startswith("data:"):
                 labels = [v for v in (a.get("alt"), a.get("title")) if v]
                 for link in self.links:
@@ -126,7 +164,9 @@ def search_category_logos(
             checked = checked.replace(tzinfo=now.tzinfo)
         return force or checked is None or now - checked > RECHECK_AFTER
 
-    pending = [t for t in teams if not t.logo_file and due(t)]
+    # Con `force` (botón del admin) también se rehacen los logos que vinieron de
+    # la FVCL; los subidos a mano no se tocan nunca.
+    pending = [t for t in teams if (not t.logo_file or (force and t.logo_source == "fvcl")) and due(t)]
     report = {"category": category.name, "checked": len(pending), "found": [], "missing": [], "error": None}
     if not pending or not category.ranking_url:
         session.commit()
@@ -147,10 +187,27 @@ def search_category_logos(
             report["missing"].append(t.name)
             continue
         try:
-            save_logo(t, download_image(url, client), source="fvcl")
+            url, image = best_image(url, client)
+            save_logo(t, image, source="fvcl")
+            log.info("Logo de %s desde %s (%s px)", t.name, url, image_size(image))
             report["found"].append(t.name)
         except LogoError as exc:
             log.info("Logo de %s no válido (%s): %s", t.name, url, exc)
             report["missing"].append(t.name)
     session.commit()
     return report
+
+
+def best_image(url: str, client: Optional[httpx.Client]) -> Tuple[str, bytes]:
+    """Descarga la miniatura y, si existe, una versión más grande de la misma imagen."""
+    original = download_image(url, client)
+    base = max(image_size(original) or (0, 0))
+    for candidate in bigger_variants(url):
+        try:
+            data = download_image(candidate, client)
+        except LogoError:
+            continue
+        size = image_size(data)
+        if size and max(size) > base:
+            return candidate, data
+    return url, original

@@ -55,6 +55,14 @@ def test_normalize_image_square_webp():
         normalize_image(b"<svg></svg>")
 
 
+def test_normalize_image_upscales_thumbnails():
+    """Las miniaturas de ~30 px de las webs deben llenar el escudo, no quedar como un punto."""
+    out = Image.open(io.BytesIO(normalize_image(png(30, 30))))
+    assert out.getbbox() == (0, 0, 160, 160)
+    with pytest.raises(LogoError, match="pequeña"):
+        normalize_image(png(8, 8))
+
+
 @pytest.mark.parametrize("url", ["http://127.0.0.1/x.png", "http://localhost/x.png", "file:///etc/passwd", "http://u:p@example.com/x"])
 def test_check_public_url_rejects_internal(url):
     with pytest.raises(LogoError):
@@ -123,3 +131,38 @@ def test_search_fvcl_logos(client, monkeypatch, ranking_bytes):
     # Sin force solo se reintenta pasada una semana
     again = client.post("/api/admin/teams/search-fvcl", json={"force": False}).json()["reports"][0]
     assert again["checked"] == 0
+
+    # Con force se rehacen los logos de la FVCL, pero nunca uno subido a mano
+    rio = teams["Rio Duero Soria A"]
+    client.post(f"/api/admin/teams/{rio['id']}/logo", files={"file": ("m.png", png(), "image/png")})
+    redo = client.post("/api/admin/teams/search-fvcl", json={"force": True}).json()["reports"][0]
+    assert redo["found"] == ["VCV Castilla"]
+    after = {t["name"]: t for t in client.get("/api/admin/teams").json()}
+    assert after["Rio Duero Soria A"]["logo_source"] == "manual"
+
+
+def test_best_image_prefers_bigger_variant(monkeypatch):
+    from app.services.logos_fvcl import best_image
+
+    files = {"/t/abc.60x60.png": png(30, 30), "/t/abc.512x512.png": png(512, 512)}
+
+    def server(request):
+        data = files.get(request.url.path)
+        return httpx.Response(200, content=data) if data else httpx.Response(404)
+
+    monkeypatch.setattr(logos, "check_public_url", lambda url: None)
+    with httpx.Client(transport=httpx.MockTransport(server)) as c:
+        url, data = best_image("https://cdn.example.com/t/abc.60x60.png", c)
+        assert url.endswith("abc.512x512.png") and Image.open(io.BytesIO(data)).size == (512, 512)
+        # Sin versión grande disponible, se queda con la miniatura
+        files.pop("/t/abc.512x512.png")
+        url, data = best_image("https://cdn.example.com/t/abc.60x60.png", c)
+        assert url.endswith("abc.60x60.png")
+
+
+def test_srcset_largest():
+    from app.services.logos_fvcl import largest_in_srcset
+
+    assert largest_in_srcset("a.png 1x, b.png 2x") == "b.png"
+    assert largest_in_srcset("a.png 60w, c.png 240w, b.png 120w") == "c.png"
+    assert largest_in_srcset(None) is None

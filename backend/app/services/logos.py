@@ -3,7 +3,7 @@ import hashlib
 import io
 import ipaddress
 import socket
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Tuple
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -17,6 +17,7 @@ from ..parsers.common import norm
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 LOGO_SIZE = 160
+MIN_SOURCE_SIZE = 16  # por debajo son iconos o espaciadores, no escudos
 MAX_REDIRECTS = 3
 
 
@@ -54,6 +55,14 @@ def logo_map(session: Session) -> Dict[str, str]:
 
 # --- imágenes ---------------------------------------------------------------
 
+def image_size(data: bytes) -> Optional[Tuple[int, int]]:
+    """(ancho, alto) de una imagen, o None si no se puede leer."""
+    try:
+        return Image.open(io.BytesIO(data)).size
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+        return None
+
+
 def normalize_image(data: bytes) -> bytes:
     """Cualquier PNG/JPG/WebP/GIF -> WebP cuadrado de 160 px con fondo transparente."""
     if len(data) > MAX_IMAGE_BYTES:
@@ -67,7 +76,12 @@ def normalize_image(data: bytes) -> bytes:
     bbox = img.getbbox()  # recorta márgenes transparentes
     if bbox:
         img = img.crop(bbox)
-    img.thumbnail((LOGO_SIZE, LOGO_SIZE), Image.LANCZOS)
+    if max(img.size) < MIN_SOURCE_SIZE:
+        raise LogoError(f"La imagen es demasiado pequeña ({img.width}×{img.height} px)")
+    # Escala para llenar el cuadrado, también hacia arriba: las webs suelen
+    # mostrar miniaturas de ~30 px y sin ampliar quedarían como un punto
+    scale = LOGO_SIZE / max(img.size)
+    img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
     canvas = Image.new("RGBA", (LOGO_SIZE, LOGO_SIZE), (0, 0, 0, 0))
     canvas.alpha_composite(img, ((LOGO_SIZE - img.width) // 2, (LOGO_SIZE - img.height) // 2))
     out = io.BytesIO()

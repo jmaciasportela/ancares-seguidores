@@ -5,6 +5,8 @@
   import { shareApp } from '../lib/share.js';
   import { toast } from '../lib/toast.js';
 
+  const version = __APP_VERSION__;
+
   const socials = [
     { name: 'Instagram', handle: '@voleibolancares', icon: 'instagram', href: 'https://www.instagram.com/voleibolancares/', cls: 'ig' },
     { name: 'Facebook', handle: 'voleibolancares', icon: 'facebook', href: 'https://www.facebook.com/voleibolancares/', cls: 'fb' },
@@ -108,7 +110,7 @@
     </form>
   {/if}
 
-  <p class="footer muted">Hecho con 💚 por familias del club · v1.0</p>
+  <p class="footer muted">Hecho con 💚 por familias del club · v{version}</p>
 </div>
 
 <style>

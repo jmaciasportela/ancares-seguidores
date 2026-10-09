@@ -18,15 +18,6 @@
       <span class="hello">Familias de</span>
       <h1>Voleibol Ancares</h1>
     </div>
-    <button
-      class="refresh"
-      class:spin={$home.loading}
-      onclick={() => home.refresh()}
-      aria-label="Actualizar datos"
-      title="Actualizar"
-    >
-      <Icon name="refresh" size={20} />
-    </button>
   </header>
 
   <p class="updated muted">
@@ -101,24 +92,6 @@
     font-size: 24px;
     font-weight: 850;
     letter-spacing: -0.01em;
-  }
-  .refresh {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    color: var(--muted);
-  }
-  .refresh.spin :global(svg) {
-    animation: spin 0.9s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
   .updated {
     font-size: 13px;
