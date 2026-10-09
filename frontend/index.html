@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Ancares Seguidores</title>
+    <meta name="description" content="Clasificación, calendario y resultados de los equipos del CDF Voleibol Ancares. App no oficial hecha por familias del club." />
+    <meta name="theme-color" content="#0b1a10" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ancares" />
+    <meta property="og:title" content="Ancares Seguidores" />
+    <meta property="og:description" content="Sigue la clasificación y los resultados del Voleibol Ancares desde el móvil." />
+    <meta property="og:image" content="/logo.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preload" as="image" href="/logo-256.webp" type="image/webp" />
+    <link rel="apple-touch-startup-image" href="/splash/splash-1320x2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-1242x2208.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+    <link rel="apple-touch-startup-image" href="/splash/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+    <style>
+      /* Splash de arranque: se pinta antes de que cargue el JS */
+      html, body { background: #0b1a10; margin: 0; }
+      #boot {
+        position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+        background: radial-gradient(circle at 50% 42%, #173a22 0%, #0b1a10 62%);
+        transition: opacity .45s ease, visibility .45s;
+      }
+      #boot.hide { opacity: 0; visibility: hidden; }
+      #boot .wrap { position: relative; display: grid; place-items: center; gap: 22px; transform: translateY(-4vh); }
+      #boot .ring {
+        position: absolute; top: 0; width: 168px; height: 168px; border-radius: 50%;
+        border: 3px solid #31a943; animation: boot-ring 1.6s ease-out infinite; opacity: 0;
+      }
+      #boot img {
+        width: 168px; height: 168px; border-radius: 50%; display: block;
+        box-shadow: 0 12px 40px rgba(0,0,0,.45);
+        animation: boot-in .7s cubic-bezier(.2,1.4,.4,1) both;
+      }
+      #boot .t {
+        font: 800 15px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        letter-spacing: .32em; text-transform: uppercase; color: #cfe9d4;
+        animation: boot-fade .6s .35s both;
+      }
+      @keyframes boot-in { from { transform: scale(.4) rotate(-120deg); opacity: 0; } to { transform: none; opacity: 1; } }
+      @keyframes boot-ring { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.7); opacity: 0; } }
+      @keyframes boot-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) { #boot *, #boot { animation: none !important; transition: none !important; } }
+    </style>
+  </head>
+  <body>
+    <div id="boot" aria-hidden="true">
+      <div class="wrap">
+        <span class="ring"></span>
+        <img src="/logo-256.webp" alt="" width="168" height="168" />
+        <span class="t">Ancares</span>
+      </div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
