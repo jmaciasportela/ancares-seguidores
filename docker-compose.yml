@@ -8,16 +8,15 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
-    networks:
-      - proxy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 60s
       timeout: 5s
       retries: 3
+    networks:
+      - amacium
 
 networks:
-  proxy:
+  amacium:
+    name: amacium
     external: true
-    # Nombre de la red de tu Nginx Proxy Manager (míralo con: docker network ls)
-    name: ${NPM_NETWORK:?Define NPM_NETWORK en .env con la red de Nginx Proxy Manager}
