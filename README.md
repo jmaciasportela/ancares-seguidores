@@ -4,7 +4,7 @@ PWA **no oficial** para que las familias del CDF Voleibol Ancares sigan la clasi
 
 - **Frontend:** Svelte 5 + Vite + vite-plugin-pwa (unos 40 KB gzip). Es instalable, funciona sin conexión, tiene splash animado y tema claro y oscuro.
 - **Backend:** FastAPI + SQLite + APScheduler. Sincroniza los Excel cada día.
-- **Despliegue:** Docker Compose + Caddy (HTTPS automático).
+- **Despliegue:** Docker Compose detrás de Nginx Proxy Manager (que pone el HTTPS).
 
 ## Estructura
 
@@ -33,11 +33,19 @@ npm run build      # genera frontend/dist, que el backend sirve en http://localh
 
 El panel de admin está en `/#/admin` y no aparece en el menú.
 
-## Despliegue (VPS con Docker)
+## Despliegue (VPS con Nginx Proxy Manager)
 
-1. Apunta un dominio, o subdominio, a la IP del servidor.
-2. `cp .env.example .env` y rellena `DOMAIN`, `PUBLIC_URL`, `ADMIN_PASSWORD`, `SECRET_KEY` y, si quieres avisos por email, `SMTP_*` y `ADMIN_EMAIL`.
-3. `docker compose up -d --build`
+1. Apunta un dominio, o subdominio, a la IP del VPS.
+2. Busca la red Docker de Nginx Proxy Manager con `docker network ls` (suele llamarse `<carpeta>_default`, por ejemplo `nginx-proxy-manager_default`).
+3. `cp .env.example .env` y rellena `NPM_NETWORK`, `PUBLIC_URL`, `ADMIN_PASSWORD`, `SECRET_KEY` y, si quieres avisos por email, `SMTP_*` y `ADMIN_EMAIL`. Deja `COOKIE_SECURE=true`.
+4. `docker compose up -d --build`
+5. En Nginx Proxy Manager, crea un *Proxy Host*:
+   - **Domain Names:** tu dominio.
+   - **Scheme / Forward Hostname / Port:** `http` · `ancares-app` · `8000`.
+   - **Block Common Exploits:** activado.
+   - **Pestaña SSL:** *Request a new SSL Certificate* con *Force SSL* y *HTTP/2*.
+
+La app no publica ningún puerto en el VPS: solo es accesible a través de Nginx Proxy Manager. El HTTPS es obligatorio para que la PWA se pueda instalar.
 
 La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad basta con copiar ese fichero.
 
@@ -48,12 +56,18 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
    - el *nombre FVCL*: lo que aparece en el nombre del Excel, por ejemplo `CRE Infantil Femenino Liga Oro`;
    - los dos enlaces `export-xls` de la federación (clasificación y calendario).
 2. **Sincronizar** descarga e importa los dos Excel al momento. Además se hace solo cada día a la hora de `SYNC_CRON`.
-3. **Si la federación bloquea la descarga** (fvcl.es tiene una protección anti-bots y a veces responde con un 429), la categoría queda como *Bloqueado* y, si el email está configurado, llega un aviso. Para actualizarla a mano:
+3. **Prueba de trabajo de fvcl.es.** A veces fvcl.es responde con un 429 y un reto de prueba de trabajo (SHA-256) en lugar del Excel. La app lo resuelve sola (`backend/app/services/pow.py`, basado en `scripts/descargar_pow.py`):
+   - usa siempre su propio User-Agent;
+   - hace un solo intento por sincronización;
+   - comparte la cookie del reto entre los ficheros de la misma pasada.
+
+   Se puede desactivar con `POW_ENABLED=false`.
+4. **Si aun así no llega el Excel**, la categoría queda como *Bloqueado* y, si el email está configurado, llega un aviso. Para actualizarla a mano:
    - **Android (con la app instalada):** abre el enlace, descarga el Excel y pulsa *Compartir → Ancares*. Se sube solo.
    - **iPhone u ordenador:** descarga los Excel y pulsa *Subir Excel* en la categoría.
-4. **Feedback:** aquí aparecen los comentarios que mandan las familias desde la pestaña *Club*.
+5. **Feedback:** aquí aparecen los comentarios que mandan las familias desde la pestaña *Club*.
 
-> La app **no intenta saltarse** la protección de la federación: hace una sola petición al día por enlace, con un User-Agent que la identifica. Si el bloqueo se vuelve habitual, lo mejor es pedir a la FVCL que permita la IP del servidor.
+> La app no se hace pasar por un navegador y descarga como mucho una vez al día por enlace. Si la federación pide que no se acceda así, pon `POW_ENABLED=false` y usa la subida manual.
 
 ## Particularidades de los Excel de la FVCL (Clupik)
 

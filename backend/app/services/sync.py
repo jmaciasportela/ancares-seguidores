@@ -11,7 +11,7 @@ from sqlalchemy import select
 from ..config import get_settings
 from ..db import SessionLocal
 from ..models import Category, SyncLog, utcnow
-from .fetcher import fetch_xls
+from .fetcher import fetch_xls, make_client
 from .importer import import_file
 from .mailer import send_admin_email
 
@@ -22,7 +22,8 @@ _last_blocked_email: Optional[date] = None
 def sync_categories(category_ids: Optional[List[int]] = None, source: str = "auto", pause: bool = False) -> List[dict]:
     """Descarga e importa clasificación y calendario de cada categoría activa."""
     report = []
-    with SessionLocal() as session:
+    # Un cliente por sincronización: la cookie de la PoW sirve para todos los ficheros
+    with SessionLocal() as session, make_client() as client:
         query = select(Category).where(Category.active.is_(True)).order_by(Category.sort_order)
         if category_ids:
             query = select(Category).where(Category.id.in_(category_ids))
@@ -36,7 +37,7 @@ def sync_categories(category_ids: Optional[List[int]] = None, source: str = "aut
             for kind, url in (("ranking", cat.ranking_url), ("calendar", cat.calendar_url)):
                 if not url:
                     continue
-                fetched = fetch_xls(url)
+                fetched = fetch_xls(url, client=client)
                 if fetched.ok:
                     res = import_file(session, cat, fetched.data, source=source)
                     report.append({"category": cat.name, "kind": kind, "status": res.status, "message": res.message, "url": url})

@@ -63,14 +63,14 @@ def test_sync_blocked_and_ok(client, monkeypatch, ranking_bytes, calendar_bytes)
     login(client)
     cat = create_category(client, ranking_url="https://fvcl.example/r", calendar_url="https://fvcl.example/c")
 
-    monkeypatch.setattr(sync, "fetch_xls", lambda url: FetchResult(ok=False, blocked=True, message="HTTP 429"))
+    monkeypatch.setattr(sync, "fetch_xls", lambda url, **kw: FetchResult(ok=False, blocked=True, message="HTTP 429"))
     report = client.post("/api/admin/sync", json={"category_id": cat["id"]}).json()["report"]
     assert {r["status"] for r in report} == {"blocked"}
     cats = client.get("/api/admin/categories").json()
     assert cats[0]["sync_status"] == "blocked"
 
     data = {"https://fvcl.example/r": ranking_bytes, "https://fvcl.example/c": calendar_bytes}
-    monkeypatch.setattr(sync, "fetch_xls", lambda url: FetchResult(ok=True, data=data[url]))
+    monkeypatch.setattr(sync, "fetch_xls", lambda url, **kw: FetchResult(ok=True, data=data[url]))
     report = client.post("/api/admin/sync", json={}).json()["report"]
     assert [r["status"] for r in report] == ["ok", "ok"]
     report = client.post("/api/admin/sync", json={}).json()["report"]

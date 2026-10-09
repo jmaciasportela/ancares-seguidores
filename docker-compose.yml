@@ -1,31 +1,23 @@
+# El HTTPS lo pone Nginx Proxy Manager. La app no publica puertos en el VPS:
+# se une a la red Docker de NPM y este le reenvía el tráfico a ancares-app:8000.
 services:
   app:
     build: .
+    container_name: ancares-app
     restart: unless-stopped
     env_file: .env
     volumes:
       - ./data:/data
+    networks:
+      - proxy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 60s
       timeout: 5s
       retries: 3
 
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:?Define DOMAIN en .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  proxy:
+    external: true
+    # Nombre de la red de tu Nginx Proxy Manager (míralo con: docker network ls)
+    name: ${NPM_NETWORK:?Define NPM_NETWORK en .env con la red de Nginx Proxy Manager}

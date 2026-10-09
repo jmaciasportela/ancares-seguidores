@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     sync_enabled: bool = True
     timezone: str = "Europe/Madrid"
     user_agent: str = "AncaresSeguidores/1.0 (app no oficial de seguidores; contacto en la app)"
+    # Resolver la prueba de trabajo de fvcl.es (desactívalo si la federación lo pide)
+    pow_enabled: bool = True
+    pow_max_seconds: float = 60
     team_keyword: str = "ancares"
 
     # Email (feedback y avisos de sincronización). Vacío = desactivado.
