@@ -9,6 +9,7 @@
   import FeedbackAdmin from './FeedbackAdmin.svelte';
   import LogsAdmin from './LogsAdmin.svelte';
   import SharedUpload from './SharedUpload.svelte';
+  import TeamsAdmin from './TeamsAdmin.svelte';
 
   let authed = $state(null); // null = comprobando
   let password = $state('');
@@ -45,6 +46,7 @@
 
   const tabs = [
     { id: 'categorias', label: 'Categorías', icon: 'trophy' },
+    { id: 'equipos', label: 'Equipos', icon: 'ball' },
     { id: 'feedback', label: 'Feedback', icon: 'inbox' },
     { id: 'registro', label: 'Registro', icon: 'list' },
   ];
@@ -88,6 +90,8 @@
       <div in:fly={{ y: 10 }}>
         {#if tab === 'categorias'}
           <CategoriesAdmin />
+        {:else if tab === 'equipos'}
+          <TeamsAdmin />
         {:else if tab === 'feedback'}
           <FeedbackAdmin />
         {:else}

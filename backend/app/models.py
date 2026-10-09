@@ -107,3 +107,17 @@ class SyncLog(Base):
     source: Mapped[str] = mapped_column(String(20))  # auto | manual | share
     status: Mapped[str] = mapped_column(String(20))  # ok | unchanged | blocked | error
     message: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class Team(Base):
+    """Equipo visto en alguna clasificación; guarda su logo (si lo hay)."""
+
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    key: Mapped[str] = mapped_column(String(200), unique=True, index=True)  # nombre normalizado
+    logo_file: Mapped[Optional[str]] = mapped_column(String(120))
+    logo_source: Mapped[Optional[str]] = mapped_column(String(20))  # manual | fvcl
+    logo_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    logo_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))  # última búsqueda en FVCL

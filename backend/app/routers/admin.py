@@ -8,11 +8,22 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..auth import RateLimiter, check_password, clear_session, is_admin, require_admin, set_session
 from ..db import get_session
-from ..models import Category, Feedback, SyncLog
+from ..models import Category, Feedback, Standing, SyncLog, Team, utcnow
 from ..parsers.common import ParseError, norm
-from ..schemas import CategoryIn, FeedbackPatch, LoginIn, SyncIn
+from ..schemas import CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, SyncIn
 from ..serializers import category_admin, iso
-from ..services.importer import import_file, sniff_kind
+from ..services.fetcher import make_client
+from ..services.importer import import_file, is_ours, sniff_kind
+from ..services.logos import (
+    MAX_IMAGE_BYTES,
+    LogoError,
+    download_image,
+    logo_url,
+    remove_logo_file,
+    save_logo,
+    sync_teams_from_standings,
+)
+from ..services.logos_fvcl import search_category_logos
 from ..services.sync import sync_categories
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -209,3 +220,83 @@ def delete_feedback(feedback_id: int, session: Session = Depends(get_session)):
         session.delete(fb)
         session.commit()
     return {"ok": True}
+
+
+# --- equipos y logos --------------------------------------------------------
+
+def _get_team(session: Session, team_id: int) -> Team:
+    team = session.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+    return team
+
+
+def _team_out(team: Team, categories: List[str]) -> dict:
+    return {
+        "id": team.id,
+        "name": team.name,
+        "logo": logo_url(team),
+        "logo_source": team.logo_source,
+        "logo_checked_at": iso(team.logo_checked_at),
+        "categories": categories,
+        "is_ours": is_ours(team.name),
+    }
+
+
+@protected.get("/teams")
+def list_teams(session: Session = Depends(get_session)):
+    sync_teams_from_standings(session)
+    cats_by_team = {}
+    for team_name, cat_name in session.execute(
+        select(Standing.team, Category.name).join(Category, Standing.category_id == Category.id)
+    ).all():
+        cats_by_team.setdefault(norm(team_name), set()).add(cat_name)
+    # Solo equipos presentes en alguna clasificación actual
+    teams = [t for t in session.scalars(select(Team).order_by(Team.name)).all() if t.key in cats_by_team]
+    return [_team_out(t, sorted(cats_by_team[t.key])) for t in teams]
+
+
+def _store_logo(session: Session, team: Team, data: bytes) -> dict:
+    try:
+        save_logo(team, data, source="manual")
+    except LogoError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"id": team.id, "logo": logo_url(team), "logo_source": team.logo_source}
+
+
+@protected.post("/teams/{team_id}/logo")
+async def upload_logo(team_id: int, file: UploadFile = File(...), session: Session = Depends(get_session)):
+    data = await file.read(MAX_IMAGE_BYTES + 1)
+    return _store_logo(session, _get_team(session, team_id), data)
+
+
+@protected.post("/teams/{team_id}/logo-url")
+def logo_from_url(team_id: int, data: LogoUrlIn, session: Session = Depends(get_session)):
+    team = _get_team(session, team_id)
+    try:
+        image = download_image(data.url.strip())
+    except LogoError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _store_logo(session, team, image)
+
+
+@protected.delete("/teams/{team_id}/logo")
+def delete_logo(team_id: int, session: Session = Depends(get_session)):
+    team = _get_team(session, team_id)
+    remove_logo_file(team)
+    team.logo_checked_at = utcnow()  # que la búsqueda automática no lo vuelva a poner enseguida
+    session.commit()
+    return {"ok": True}
+
+
+@protected.post("/teams/search-fvcl")
+def search_fvcl_logos(data: LogoSearchIn, session: Session = Depends(get_session)):
+    query = select(Category).where(Category.active.is_(True), Category.ranking_url.is_not(None))
+    if data.category_id:
+        query = select(Category).where(Category.id == data.category_id)
+    reports = []
+    with make_client() as client:
+        for cat in session.scalars(query).all():
+            reports.append(search_category_logos(session, cat, client, force=data.force))
+    return {"reports": reports}

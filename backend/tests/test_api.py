@@ -63,6 +63,7 @@ def test_sync_blocked_and_ok(client, monkeypatch, ranking_bytes, calendar_bytes)
     login(client)
     cat = create_category(client, ranking_url="https://fvcl.example/r", calendar_url="https://fvcl.example/c")
 
+    monkeypatch.setattr(sync, "search_category_logos", lambda *a, **kw: {"checked": 0})  # sin red
     monkeypatch.setattr(sync, "fetch_xls", lambda url, **kw: FetchResult(ok=False, blocked=True, message="HTTP 429"))
     report = client.post("/api/admin/sync", json={"category_id": cat["id"]}).json()["report"]
     assert {r["status"] for r in report} == {"blocked"}

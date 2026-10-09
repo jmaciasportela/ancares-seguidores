@@ -42,13 +42,17 @@ def health():
 async def cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path.startswith("/assets/"):
+    if path.startswith(("/assets/", "/logos/")):
         # Ficheros con hash en el nombre: caché inmutable
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif path in ("/", "/index.html", "/sw.js", "/manifest.webmanifest") or path.startswith("/workbox-"):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
+
+# Logos de equipos (el nombre lleva hash: caché inmutable)
+settings.logos_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/logos", StaticFiles(directory=settings.logos_dir), name="logos")
 
 # Frontend compilado (Svelte). Si no existe, el backend sirve solo la API.
 if settings.static_dir.is_dir():

@@ -127,7 +127,7 @@
         {#if tab === 'clasificacion'}
           {#if data.standings.length}
             <StandingsTable standings={data.standings} />
-            <p class="legend muted">Pts: puntos · PJ: jugados · G: ganados · P: perdidos · Sets: a favor - en contra</p>
+            <p class="legend muted">Pts: puntos · PJ: jugados · G: ganados · P: perdidos<span class="sets-legend"> · Sets: a favor - en contra</span></p>
           {:else}
             <div class="card empty">Aún no hay clasificación.</div>
           {/if}
@@ -269,6 +269,11 @@
     text-align: center;
     margin-top: 12px;
   }
+  @media (max-width: 430px) {
+    .sets-legend {
+      display: none;
+    }
+  }
   .toggle {
     display: flex;
     align-items: center;
@@ -332,6 +337,7 @@
   }
   .matches {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
   .empty {

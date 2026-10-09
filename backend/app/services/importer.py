@@ -12,6 +12,7 @@ from ..models import Category, Match, Standing, SyncLog, utcnow
 from ..parsers.calendar import parse_calendar, split_teams
 from ..parsers.common import ParseError, detect_kind, norm, read_rows
 from ..parsers.ranking import parse_ranking
+from .logos import ensure_teams
 
 
 @dataclass
@@ -87,6 +88,7 @@ def _store_ranking(session: Session, category: Category, rows) -> int:
         )
     session.flush()
     session.expire(category, ["standings"])
+    ensure_teams(session, [s.team for s in parsed])
     # Si el calendario llegó antes que la clasificación, se vuelve a separar
     # local/visitante con los nombres de equipo ya conocidos.
     known = [s.team for s in parsed]

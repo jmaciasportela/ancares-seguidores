@@ -27,7 +27,7 @@
     >
       <span role="cell" class="pos"><b class="n" class:top={s.position <= 3}>{s.position}</b></span>
       <span role="cell" class="team">
-        <TeamBadge name={s.team} size={26} />
+        <TeamBadge name={s.team} logo={s.logo} size={26} />
         <span class="ellipsis">{shortTeam(s.team)}</span>
       </span>
       <span role="cell" class="pts">{s.points}</span>
@@ -111,7 +111,7 @@
     background: var(--brand);
     color: #fff;
   }
-  @media (max-width: 360px) {
+  @media (max-width: 430px) {
     .tr {
       grid-template-columns: 30px minmax(0, 1fr) 34px 26px 24px 24px;
       padding: 9px 8px;

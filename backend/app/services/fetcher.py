@@ -7,7 +7,7 @@ propio, un único intento por fichero y sin reintentos. Si aun así no llega un
 """
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 import httpx
 
@@ -41,10 +41,19 @@ def _blocked(resp: httpx.Response, reason: str) -> FetchResult:
 
 
 def fetch_xls(url: str, client: Optional[httpx.Client] = None) -> FetchResult:
+    return fetch(url, client, accept=lambda r: looks_like_xls(r.content), what="un Excel")
+
+
+def fetch_html(url: str, client: Optional[httpx.Client] = None) -> FetchResult:
+    """Página HTML de fvcl.es (p. ej. la clasificación, para buscar escudos)."""
+    return fetch(url, client, accept=lambda r: "text/html" in r.headers.get("content-type", ""), what="una página HTML")
+
+
+def fetch(url: str, client: Optional[httpx.Client], accept: Callable[[httpx.Response], bool], what: str) -> FetchResult:
     own_client = client is None
     client = client or make_client()
     try:
-        return _fetch(client, url)
+        return _fetch(client, url, accept, what)
     except httpx.HTTPError as exc:
         return FetchResult(ok=False, message=f"Error de red: {type(exc).__name__}")
     finally:
@@ -52,10 +61,15 @@ def fetch_xls(url: str, client: Optional[httpx.Client] = None) -> FetchResult:
             client.close()
 
 
-def _fetch(client: httpx.Client, url: str) -> FetchResult:
+def _fetch(client: httpx.Client, url: str, accept: Callable[[httpx.Response], bool], what: str) -> FetchResult:
     settings = get_settings()
+
+    def good(r: httpx.Response) -> bool:
+        # La página del reto también es HTML: nunca cuenta como respuesta válida
+        return r.status_code == 200 and accept(r) and parse_challenge(r.content) is None
+
     resp = client.get(url)
-    if resp.status_code == 200 and looks_like_xls(resp.content):
+    if good(resp):
         return FetchResult(ok=True, data=resp.content)
 
     challenge = parse_challenge(resp.content) if resp.status_code in (200, 429) else None
@@ -77,8 +91,8 @@ def _fetch(client: httpx.Client, url: str) -> FetchResult:
         return _blocked(check, "la federación no aceptó la prueba de trabajo")
 
     resp = client.get(url)
-    if resp.status_code == 200 and looks_like_xls(resp.content):
+    if good(resp):
         return FetchResult(ok=True, data=resp.content)
     if parse_challenge(resp.content):
         return _blocked(resp, "la federación sigue mostrando el reto tras validarlo")
-    return _blocked(resp, "la respuesta no es un Excel")
+    return _blocked(resp, f"la respuesta no es {what}")

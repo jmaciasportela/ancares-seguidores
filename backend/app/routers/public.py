@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..db import get_session
 from ..models import Category
 from ..serializers import category_detail, category_summary, iso
+from ..services.logos import logo_map
 
 router = APIRouter(prefix="/api", tags=["public"])
 
@@ -35,12 +36,14 @@ def _active(session: Session):
 def home(request: Request, session: Session = Depends(get_session)):
     cats = _active(session)
     updated = max((c.data_updated_at for c in cats if c.data_updated_at), default=None)
-    return cached_json(request, {"categories": [category_summary(c) for c in cats], "updated_at": iso(updated)})
+    logos = logo_map(session)
+    return cached_json(request, {"categories": [category_summary(c, logos) for c in cats], "updated_at": iso(updated)})
 
 
 @router.get("/categories")
 def categories(request: Request, session: Session = Depends(get_session)):
-    return cached_json(request, [category_summary(c) for c in _active(session)])
+    logos = logo_map(session)
+    return cached_json(request, [category_summary(c, logos) for c in _active(session)])
 
 
 @router.get("/categories/{slug}")
@@ -52,4 +55,4 @@ def category(slug: str, request: Request, session: Session = Depends(get_session
     ).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
-    return cached_json(request, category_detail(cat))
+    return cached_json(request, category_detail(cat, logo_map(session)))

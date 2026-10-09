@@ -12,7 +12,7 @@
 
 {#if match.is_bye}
   <div class="row bye">
-    <TeamBadge name={match.home} size={28} />
+    <TeamBadge name={match.home} logo={match.home_logo} size={28} />
     <span class="ellipsis"><b>{shortTeam(match.home)}</b> descansa</span>
   </div>
 {:else}
@@ -21,12 +21,12 @@
     <div class="line">
       <div class="teams">
         <div class="team" class:won={homeWon}>
-          <TeamBadge name={match.home} size={26} />
+          <TeamBadge name={match.home} logo={match.home_logo} size={26} />
           <span class="ellipsis">{shortTeam(match.home)}</span>
           {#if match.played}<b class="sets">{match.home_sets}</b>{/if}
         </div>
         <div class="team" class:won={awayWon}>
-          <TeamBadge name={match.away} size={26} />
+          <TeamBadge name={match.away} logo={match.away_logo} size={26} />
           <span class="ellipsis">{shortTeam(match.away)}</span>
           {#if match.played}<b class="sets">{match.away_sets}</b>{/if}
         </div>
@@ -46,9 +46,9 @@
       {:else}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>
         {#if match.venue}
-          <a class="venue ellipsis" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
+          <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
             <Icon name="pin" size={14} />
-            {match.venue}
+            <span>{match.venue}</span>
           </a>
         {/if}
       {/if}
@@ -58,6 +58,7 @@
 
 <style>
   .row {
+    min-width: 0; /* elemento de rejilla: que no se estire con textos largos */
     padding: 12px 14px;
     border-radius: var(--radius-sm);
     background: var(--surface);
@@ -152,8 +153,18 @@
     max-width: 100%;
   }
   .venue {
+    align-items: flex-start;
+    min-width: 0;
     color: var(--muted);
     text-decoration: none;
+  }
+  .venue :global(svg) {
+    flex: none;
+    margin-top: 1px;
+  }
+  .venue span {
+    min-width: 0;
+    overflow-wrap: anywhere; /* direcciones largas: pasan a la línea siguiente */
   }
   .pill {
     padding: 2px 8px;

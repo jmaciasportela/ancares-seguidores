@@ -1,7 +1,14 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .models import Category, Match, Standing
+from .parsers.common import norm
+
+Logos = Dict[str, str]  # nombre normalizado -> URL del logo
+
+
+def _logo(logos: Optional[Logos], name: Optional[str]) -> Optional[str]:
+    return logos.get(norm(name)) if logos and name else None
 
 
 def iso(dt: Optional[datetime]) -> Optional[str]:
@@ -18,10 +25,11 @@ def _aware(dt: Optional[datetime]) -> Optional[datetime]:
     return dt
 
 
-def standing_out(s: Standing) -> dict:
+def standing_out(s: Standing, logos: Optional[Logos] = None) -> dict:
     return {
         "position": s.position,
         "team": s.team,
+        "logo": _logo(logos, s.team),
         "points": s.points,
         "played": s.played,
         "won": s.won,
@@ -35,13 +43,15 @@ def standing_out(s: Standing) -> dict:
     }
 
 
-def match_out(m: Match) -> dict:
+def match_out(m: Match, logos: Optional[Logos] = None) -> dict:
     return {
         "id": m.id,
         "round_no": m.round_no,
         "round_name": m.round_name,
         "home": m.home,
         "away": m.away,
+        "home_logo": _logo(logos, m.home),
+        "away_logo": _logo(logos, m.away),
         "is_bye": m.is_bye,
         "starts_at": iso(m.starts_at),
         "venue": m.venue,
@@ -73,7 +83,7 @@ def last_result(matches: List[Match]) -> Optional[Match]:
     return max(played, key=lambda m: (m.round_no, _aware(m.starts_at) or datetime.min.replace(tzinfo=timezone.utc), m.order))
 
 
-def category_summary(c: Category) -> dict:
+def category_summary(c: Category, logos: Optional[Logos] = None) -> dict:
     ours = next((s for s in c.standings if s.is_ours), None)
     nm, lr = next_match(c.matches), last_result(c.matches)
     return {
@@ -84,16 +94,16 @@ def category_summary(c: Category) -> dict:
         "our_team": ours.team if ours else None,
         "our_position": ours.position if ours else None,
         "our_points": ours.points if ours else None,
-        "next_match": match_out(nm) if nm else None,
-        "last_result": match_out(lr) if lr else None,
+        "next_match": match_out(nm, logos) if nm else None,
+        "last_result": match_out(lr, logos) if lr else None,
         "updated_at": iso(c.data_updated_at),
     }
 
 
-def category_detail(c: Category) -> dict:
-    data = category_summary(c)
-    data["standings"] = [standing_out(s) for s in c.standings]
-    data["matches"] = [match_out(m) for m in c.matches]
+def category_detail(c: Category, logos: Optional[Logos] = None) -> dict:
+    data = category_summary(c, logos)
+    data["standings"] = [standing_out(s, logos) for s in c.standings]
+    data["matches"] = [match_out(m, logos) for m in c.matches]
     return data
 
 

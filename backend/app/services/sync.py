@@ -13,6 +13,7 @@ from ..db import SessionLocal
 from ..models import Category, SyncLog, utcnow
 from .fetcher import fetch_xls, make_client
 from .importer import import_file
+from .logos_fvcl import search_category_logos
 from .mailer import send_admin_email
 
 log = logging.getLogger(__name__)
@@ -52,6 +53,15 @@ def sync_categories(category_ids: Optional[List[int]] = None, source: str = "aut
                 cat.sync_status, cat.last_error = failure
                 cat.last_sync_at = utcnow()
                 session.commit()
+            elif cat.ranking_url:
+                # Escudos de los equipos que aún no tienen (como mucho, una vez por semana)
+                try:
+                    logos = search_category_logos(session, cat, client)
+                    if logos["checked"]:
+                        log.info("Logos %s: %s", cat.name, logos)
+                except Exception:  # noqa: BLE001 - los logos nunca deben romper la sincronización
+                    session.rollback()
+                    log.exception("Fallo buscando logos de %s", cat.name)
     return report
 
 

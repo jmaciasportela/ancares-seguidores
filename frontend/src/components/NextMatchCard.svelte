@@ -16,7 +16,7 @@
 
   <div class="teams">
     <div class="team">
-      <TeamBadge name={match.home} size={52} />
+      <TeamBadge name={match.home} logo={match.home_logo} size={52} />
       <span class="name">{shortTeam(match.home)}</span>
     </div>
     <div class="vs">
@@ -24,7 +24,7 @@
       <span class="day">{formatDay(match.starts_at)}</span>
     </div>
     <div class="team">
-      <TeamBadge name={match.away} size={52} />
+      <TeamBadge name={match.away} logo={match.away_logo} size={52} />
       <span class="name">{shortTeam(match.away)}</span>
     </div>
   </div>
@@ -37,7 +37,7 @@
     {#if match.venue}
       <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
         <Icon name="pin" size={16} />
-        <span class="ellipsis">{match.venue}</span>
+        <span class="venue-text">{match.venue}</span>
       </a>
     {:else}
       <span class="venue"><Icon name="pin" size={16} /> Pabellón por confirmar</span>
@@ -146,6 +146,18 @@
     color: rgba(255, 255, 255, 0.85);
     font-size: 14px;
     text-decoration: none;
+  }
+  .venue :global(svg) {
+    flex: none;
+  }
+  .venue-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .share {
     flex: none;

@@ -8,6 +8,7 @@ import pytest
 _tmp = tempfile.mkdtemp(prefix="ancares-test-")
 os.environ.update(
     DB_PATH=str(Path(_tmp) / "test.db"),
+    LOGOS_DIR=str(Path(_tmp) / "logos"),
     STATIC_DIR=str(Path(_tmp) / "no-frontend"),
     SYNC_ENABLED="false",
     ADMIN_PASSWORD="secreto",

@@ -36,8 +36,8 @@ El panel de admin está en `/#/admin` y no aparece en el menú.
 ## Despliegue (VPS con Nginx Proxy Manager)
 
 1. Apunta un dominio, o subdominio, a la IP del VPS.
-2. Busca la red Docker de Nginx Proxy Manager con `docker network ls` (suele llamarse `<carpeta>_default`, por ejemplo `nginx-proxy-manager_default`).
-3. `cp .env.example .env` y rellena `NPM_NETWORK`, `PUBLIC_URL`, `ADMIN_PASSWORD`, `SECRET_KEY` y, si quieres avisos por email, `SMTP_*` y `ADMIN_EMAIL`. Deja `COOKIE_SECURE=true`.
+2. La app se conecta a la red Docker externa `amacium`, la misma que usa Nginx Proxy Manager (está fijada en `docker-compose.yml`). Si tu red se llama de otra forma (consúltalo con `docker network ls`), cámbiala ahí.
+3. `cp .env.example .env` y rellena `PUBLIC_URL`, `ADMIN_PASSWORD`, `SECRET_KEY` y, si quieres avisos por email, `SMTP_*` y `ADMIN_EMAIL`. Deja `COOKIE_SECURE=true`.
 4. `docker compose up -d --build`
 5. En Nginx Proxy Manager, crea un *Proxy Host*:
    - **Domain Names:** tu dominio.
@@ -65,7 +65,12 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
 4. **Si aun así no llega el Excel**, la categoría queda como *Bloqueado* y, si el email está configurado, llega un aviso. Para actualizarla a mano:
    - **Android (con la app instalada):** abre el enlace, descarga el Excel y pulsa *Compartir → Ancares*. Se sube solo.
    - **iPhone u ordenador:** descarga los Excel y pulsa *Subir Excel* en la categoría.
-5. **Feedback:** aquí aparecen los comentarios que mandan las familias desde la pestaña *Club*.
+5. **Equipos y logos.** La pestaña *Equipos* lista todos los equipos de las clasificaciones, y hay dos formas de ponerles escudo:
+   - **Automática:** el botón *Buscar logos en la FVCL* abre la página de clasificación de cada categoría (la URL del Excel sin `/export-xls`) y busca la imagen asociada a cada nombre de equipo. También se hace sola en la sincronización diaria, como mucho una vez por semana para cada equipo sin logo.
+   - **Manual:** con *Subir* o *Enlace* (PNG, JPG o WebP). Un logo puesto a mano nunca lo sustituye la búsqueda automática.
+
+   Las imágenes se convierten a WebP de 160 px y se guardan en `data/logos/`. Los equipos sin logo muestran sus iniciales.
+6. **Feedback:** aquí aparecen los comentarios que mandan las familias desde la pestaña *Club*.
 
 > La app no se hace pasar por un navegador y descarga como mucho una vez al día por enlace. Si la federación pide que no se acceda así, pon `POW_ENABLED=false` y usa la subida manual.
 

@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     db_path: Path = BASE_DIR.parent / "data" / "ancares.db"
     static_dir: Path = BASE_DIR.parent / "frontend" / "dist"
+    # Logos de equipos (por defecto, junto a la base de datos)
+    logos_dir: Optional[Path] = None
 
     admin_password: str = "cambiame"
     secret_key: str = "dev-secret-cambiame"
@@ -41,4 +43,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if settings.logos_dir is None:
+        settings.logos_dir = settings.db_path.parent / "logos"
+    return settings

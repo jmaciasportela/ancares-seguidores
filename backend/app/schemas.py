@@ -45,3 +45,12 @@ class FeedbackPatch(BaseModel):
 
 class SyncIn(BaseModel):
     category_id: Optional[int] = None
+
+
+class LogoUrlIn(BaseModel):
+    url: str = Field(min_length=8, max_length=1000)
+
+
+class LogoSearchIn(BaseModel):
+    category_id: Optional[int] = None
+    force: bool = True  # desde el panel, ignora la espera semanal
