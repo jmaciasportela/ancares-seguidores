@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     session_max_age: int = 60 * 60 * 24 * 30
 
-    # Sincronización diaria: "minuto hora * * *" en Europe/Madrid
-    sync_cron: str = "0 7 * * *"
+    # Sincronización con la FVCL (formato cron, hora de Madrid): a las 12:00 y a las 16:00
+    sync_cron: str = "0 12,16 * * *"
     sync_enabled: bool = True
     timezone: str = "Europe/Madrid"
     user_agent: str = "AncaresSeguidores/1.0 (app no oficial de seguidores; contacto en la app)"
@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     pow_enabled: bool = True
     pow_max_seconds: float = 60
     team_keyword: str = "ancares"
+    # Previsión del tiempo (Open-Meteo). Ciudad si no se deduce del pabellón ni del equipo local
+    weather_enabled: bool = True
+    weather_default_city: str = "Valladolid"
 
     # Email (feedback y avisos de sincronización). Vacío = desactivado.
     smtp_host: Optional[str] = None

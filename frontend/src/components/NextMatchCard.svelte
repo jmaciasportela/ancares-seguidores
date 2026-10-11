@@ -2,6 +2,7 @@
   import Countdown from './Countdown.svelte';
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
+  import WeatherChip from './WeatherChip.svelte';
   import { formatDay, formatTime, mapsUrl, shortTeam } from '../lib/format.js';
   import { go } from '../lib/router.js';
   import { shareMatch } from '../lib/share.js';
@@ -34,6 +35,7 @@
 
   {#if match.starts_at}
     <div class="countdown"><Countdown iso={match.starts_at} /></div>
+    <div class="weather"><WeatherChip {match} tone="dark" /></div>
   {/if}
 
   <footer>
@@ -136,6 +138,9 @@
   .countdown {
     display: flex;
     justify-content: center;
+    margin-bottom: 14px;
+  }
+  .weather:not(:empty) {
     margin-bottom: 14px;
   }
   footer {

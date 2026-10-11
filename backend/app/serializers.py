@@ -96,20 +96,29 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
     }
 
 
-def next_match(matches: List[Match], ctx: Ctx = EMPTY, now: Optional[datetime] = None) -> Optional[Match]:
-    """Próximo partido de Ancares sin jugar (incluye el que se está jugando ahora).
+def upcoming(matches: List[Match], ctx: Ctx = EMPTY, limit: int = 2, now: Optional[datetime] = None) -> List[Match]:
+    """Próximos partidos de Ancares sin jugar (incluye el que se está jugando ahora).
 
-    Un partido con resultado provisional ya se ha jugado: no es el próximo.
+    Primero los que tienen fecha, por orden; después los que aún no la tienen,
+    por jornada. Un partido con resultado provisional ya se ha jugado.
     """
     now = now or datetime.now(timezone.utc)
     pending = [m for m in matches if m.is_ours and not m.is_bye and m.home_sets is None and not ctx.provisional_for(m)]
-    dated = [m for m in pending if m.starts_at and _aware(m.starts_at) >= now - timedelta(hours=3)]
-    if dated:
-        return min(dated, key=lambda m: _aware(m.starts_at))
-    # Sin fecha: el de la jornada más baja posterior al último jugado
+    dated = sorted(
+        (m for m in pending if m.starts_at and _aware(m.starts_at) >= now - timedelta(hours=3)),
+        key=lambda m: _aware(m.starts_at),
+    )
     last = last_result(matches, ctx)
-    after = [m for m in pending if not m.starts_at and (last is None or m.round_no > last.round_no)]
-    return min(after, key=lambda m: (m.round_no, m.order)) if after else None
+    undated = sorted(
+        (m for m in pending if not m.starts_at and (last is None or m.round_no > last.round_no)),
+        key=lambda m: (m.round_no, m.order),
+    )
+    return (dated + undated)[:limit]
+
+
+def next_match(matches: List[Match], ctx: Ctx = EMPTY, now: Optional[datetime] = None) -> Optional[Match]:
+    nxt = upcoming(matches, ctx, 1, now)
+    return nxt[0] if nxt else None
 
 
 def last_result(matches: List[Match], ctx: Ctx = EMPTY) -> Optional[Match]:
@@ -122,7 +131,10 @@ def last_result(matches: List[Match], ctx: Ctx = EMPTY) -> Optional[Match]:
 
 def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
     ours = next((s for s in c.standings if s.is_ours), None)
-    nm, lr = next_match(c.matches, ctx), last_result(c.matches, ctx)
+    coming = upcoming(c.matches, ctx, 2)
+    nm = coming[0] if coming else None
+    am = coming[1] if len(coming) > 1 else None
+    lr = last_result(c.matches, ctx)
     return {
         "id": c.id,
         "name": c.name,
@@ -132,6 +144,7 @@ def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
         "our_position": ours.position if ours else None,
         "our_points": ours.points if ours else None,
         "next_match": match_out(nm, ctx) if nm else None,
+        "after_match": match_out(am, ctx) if am else None,
         "last_result": match_out(lr, ctx) if lr else None,
         "score_format": format_of(c.score_format),
         "updated_at": iso(c.data_updated_at),

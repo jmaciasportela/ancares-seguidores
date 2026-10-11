@@ -67,7 +67,7 @@ def sync_categories(category_ids: Optional[List[int]] = None, source: str = "aut
 
 def daily_job() -> None:
     global _last_blocked_email
-    log.info("Sincronización diaria iniciada")
+    log.info("Sincronización programada iniciada")
     report = sync_categories(source="auto", pause=True)
     failed = [r for r in report if r["status"] in ("blocked", "error")]
     if failed and _last_blocked_email != date.today():
@@ -83,7 +83,7 @@ def daily_job() -> None:
         lines += ["", f"Panel de admin: {settings.public_url}/#/admin"]
         send_admin_email("Hay ficheros pendientes de subir", "\n".join(lines))
         _last_blocked_email = date.today()
-    log.info("Sincronización diaria terminada: %s", report)
+    log.info("Sincronización programada terminada: %s", report)
 
 
 def start_scheduler() -> Optional[BackgroundScheduler]:

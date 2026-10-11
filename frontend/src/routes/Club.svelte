@@ -86,7 +86,7 @@
     <Icon name="info" size={22} />
     <div>
       <p><b>App no oficial.</b> No pertenece al club ni a la federación: la ha hecho un padre del equipo en su tiempo libre para que las familias sigamos a nuestras jugadoras.</p>
-      <p>Los datos salen de la <a href="https://fvcl.es" target="_blank" rel="noopener">Federación de Voleibol de Castilla y León</a> y se actualizan una vez al día. Puede haber retrasos o errores; <b>si hay dudas, manda la web oficial</b>.</p>
+      <p>Los datos salen de la <a href="https://fvcl.es" target="_blank" rel="noopener">Federación de Voleibol de Castilla y León</a> y se actualizan dos veces al día. Puede haber retrasos o errores; <b>si hay dudas, manda la web oficial</b>.</p>
       <p class="muted small">Se ofrece tal cual, sin garantía de ningún tipo.</p>
     </div>
   </div>

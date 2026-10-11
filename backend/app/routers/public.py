@@ -6,10 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..db import get_session
-from ..models import Category
+from ..config import get_settings
+from ..models import Category, Match
 from ..serializers import Ctx, category_detail, category_summary, iso
 from ..services.logos import logo_map
 from ..services.provisional import provisional_map
+from ..services.weather import forecast_for
 
 router = APIRouter(prefix="/api", tags=["public"])
 
@@ -63,3 +65,22 @@ def category(slug: str, request: Request, session: Session = Depends(get_session
     if not cat:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
     return cached_json(request, category_detail(cat, make_ctx(session)))
+
+
+@router.get("/weather/{match_id}")
+def weather(match_id: int, session: Session = Depends(get_session)):
+    """Previsión del tiempo a la hora del partido (con caché: no hace falta pedirla a menudo)."""
+    m = session.get(Match, match_id)
+    if not m or m.is_bye:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+    if not get_settings().weather_enabled:
+        data = {"available": False, "reason": "disabled"}
+    elif not m.starts_at:
+        data = {"available": False, "reason": "no_date"}
+    else:
+        data = forecast_for(m.starts_at, m.venue, m.home)
+    return Response(
+        json.dumps(data, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=1800"},
+    )

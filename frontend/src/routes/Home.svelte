@@ -3,6 +3,7 @@
   import InstallBanner from '../components/InstallBanner.svelte';
   import MatchRow from '../components/MatchRow.svelte';
   import NextMatchCard from '../components/NextMatchCard.svelte';
+  import UpcomingCard from '../components/UpcomingCard.svelte';
   import { resource } from '../lib/api.js';
   import { timeAgo } from '../lib/format.js';
   import { fly } from '../lib/motion.js';
@@ -54,6 +55,9 @@
 
       {#if cat.next_match}
         <NextMatchCard match={cat.next_match} category={cat.name} />
+        {#if cat.after_match}
+          <UpcomingCard match={cat.after_match} />
+        {/if}
       {:else}
         <div class="nomatch card muted">No hay próximos partidos programados.</div>
       {/if}

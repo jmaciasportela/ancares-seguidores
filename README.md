@@ -3,7 +3,7 @@
 PWA **no oficial** para que las familias del CDF Voleibol Ancares sigan la clasificación, el calendario y los resultados de cada categoría. Los datos salen de los Excel que publica la Federación de Voleibol de Castilla y León (fvcl.es).
 
 - **Frontend:** Svelte 5 + Vite + vite-plugin-pwa (unos 40 KB gzip). Es instalable, funciona sin conexión, tiene splash animado y tema claro y oscuro.
-- **Backend:** FastAPI + SQLite + APScheduler. Sincroniza los Excel cada día.
+- **Backend:** FastAPI + SQLite + APScheduler. Sincroniza los Excel dos veces al día (12:00 y 16:00).
 - **Despliegue:** Docker Compose detrás de Nginx Proxy Manager (que pone el HTTPS).
 
 ## Estructura
@@ -69,7 +69,7 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
    - el nombre visible;
    - el *nombre FVCL*: lo que aparece en el nombre del Excel, por ejemplo `CRE Infantil Femenino Liga Oro`;
    - los dos enlaces `export-xls` de la federación (clasificación y calendario).
-2. **Sincronizar** descarga e importa los dos Excel al momento. Además se hace solo cada día a la hora de `SYNC_CRON`.
+2. **Sincronizar** descarga e importa los dos Excel al momento. Además se hace solo a las 12:00 y a las 16:00 (hora de Madrid), según `SYNC_CRON`.
 3. **Prueba de trabajo de fvcl.es.** A veces fvcl.es responde con un 429 y un reto de prueba de trabajo (SHA-256) en lugar del Excel. La app lo resuelve sola (`backend/app/services/pow.py`, basado en `scripts/descargar_pow.py`):
    - usa siempre su propio User-Agent;
    - hace un solo intento por sincronización;
@@ -80,13 +80,26 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
    - **Android (con la app instalada):** abre el enlace, descarga el Excel y pulsa *Compartir → Ancares*. Se sube solo.
    - **iPhone u ordenador:** descarga los Excel y pulsa *Subir Excel* en la categoría.
 5. **Equipos y logos.** La pestaña *Equipos* lista todos los equipos de las clasificaciones, y hay dos formas de ponerles escudo:
-   - **Automática:** el botón *Buscar logos en la FVCL* abre la página de clasificación de cada categoría (la URL del Excel sin `/export-xls`), busca la imagen asociada a cada nombre de equipo y rehace los logos que ya vinieron de la FVCL. También se hace sola en la sincronización diaria, como mucho una vez por semana para cada equipo sin logo. Las miniaturas pequeñas se amplían para llenar el escudo y las de menos de 16 px se descartan.
+   - **Automática:** el botón *Buscar logos en la FVCL* abre la página de clasificación de cada categoría (la URL del Excel sin `/export-xls`), busca la imagen asociada a cada nombre de equipo y rehace los logos que ya vinieron de la FVCL. También se hace sola en las sincronizaciones programadas, como mucho una vez por semana para cada equipo sin logo. Las miniaturas pequeñas se amplían para llenar el escudo y las de menos de 16 px se descartan.
    - **Manual:** con *Subir* o *Enlace* (PNG, JPG o WebP). Un logo puesto a mano nunca lo sustituye la búsqueda automática.
 
    Las imágenes se convierten a WebP de 160 px y se guardan en `data/logos/`. Los equipos sin logo muestran sus iniciales.
 6. **Feedback:** aquí aparecen los comentarios que mandan las familias desde la pestaña *Club*.
 
-> La app no se hace pasar por un navegador y descarga como mucho una vez al día por enlace. Si la federación pide que no se acceda así, pon `POW_ENABLED=false` y usa la subida manual.
+> La app no se hace pasar por un navegador y descarga como mucho dos veces al día por enlace. Si la federación pide que no se acceda así, pon `POW_ENABLED=false` y usa la subida manual.
+
+## Portada y previsión del tiempo
+
+La portada muestra para cada categoría el **próximo partido** en grande, con cuenta atrás y previsión del tiempo, y debajo una tarjeta más pequeña con el **siguiente partido**.
+
+La previsión sale de [Open-Meteo](https://open-meteo.com), un servicio gratuito y sin clave. Se pide para la hora del partido y el servidor la guarda en caché una hora. Solo hay previsión hasta unos 15 días vista; antes, la tarjeta indica desde qué día estará disponible.
+
+Como los pabellones no traen coordenadas, la ubicación es aproximada por ciudad:
+1. Se busca una localidad conocida de Castilla y León en el nombre del pabellón o en el del equipo local (*Rio Duero **Soria** A*).
+2. Si no aparece, se geolocaliza lo que va tras la última coma del pabellón (*Pabellón X, **Localidad***).
+3. Si tampoco, se usa `WEATHER_DEFAULT_CITY` (Valladolid).
+
+La tarjeta indica siempre para qué ciudad es la previsión. Los pabellones habituales sin ciudad en el nombre se añaden en `VENUE_HINTS` (`backend/app/services/weather.py`).
 
 ## Marcador y resultados provisionales
 
