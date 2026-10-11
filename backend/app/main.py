@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import init_db
-from .routers import admin, feedback, public
+from .routers import admin, feedback, public, scoring
 from .services.sync import start_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -28,6 +28,7 @@ app = FastAPI(title="Ancares Seguidores", lifespan=lifespan, docs_url="/api/docs
 app.add_middleware(GZipMiddleware, minimum_size=800)
 
 app.include_router(public.router)
+app.include_router(scoring.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
 app.include_router(admin.protected)

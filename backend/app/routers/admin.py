@@ -6,12 +6,21 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Resp
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from ..auth import RateLimiter, check_password, clear_session, is_admin, require_admin, set_session
+from ..auth import (
+    RateLimiter,
+    check_password,
+    clear_session,
+    hash_code,
+    is_admin,
+    new_scorer_code,
+    require_admin,
+    set_session,
+)
 from ..db import get_session
-from ..models import Category, Feedback, Standing, SyncLog, Team, utcnow
+from ..models import Category, Feedback, ProvisionalResult, Scorer, Standing, SyncLog, Team, utcnow
 from ..parsers.common import ParseError, norm
-from ..schemas import CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, SyncIn
-from ..serializers import category_admin, iso
+from ..schemas import CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, ScorerIn, SyncIn
+from ..serializers import category_admin, iso, provisional_out
 from ..services.fetcher import make_client
 from ..services.importer import import_file, is_ours, sniff_kind
 from ..services.logos import (
@@ -300,3 +309,96 @@ def search_fvcl_logos(data: LogoSearchIn, session: Session = Depends(get_session
         for cat in session.scalars(query).all():
             reports.append(search_category_logos(session, cat, client, force=data.force))
     return {"reports": reports}
+
+
+# --- anotadores ---------------------------------------------------------------
+
+def _scorer_out(s: Scorer, code: Optional[str] = None) -> dict:
+    out = {"id": s.id, "name": s.name, "active": s.active,
+           "created_at": iso(s.created_at), "last_used_at": iso(s.last_used_at)}
+    if code:
+        out["code"] = code  # solo al crear o regenerar: no se guarda en claro
+    return out
+
+
+def _unique_code(session: Session) -> str:
+    while True:
+        code = new_scorer_code()
+        if not session.scalars(select(Scorer).where(Scorer.code_hash == hash_code(code))).first():
+            return code
+
+
+def _get_scorer(session: Session, scorer_id: int) -> Scorer:
+    scorer = session.get(Scorer, scorer_id)
+    if not scorer:
+        raise HTTPException(status_code=404, detail="Anotador no encontrado")
+    return scorer
+
+
+@protected.get("/scorers")
+def list_scorers(session: Session = Depends(get_session)):
+    return [_scorer_out(s) for s in session.scalars(select(Scorer).order_by(Scorer.name)).all()]
+
+
+@protected.post("/scorers", status_code=201)
+def create_scorer(data: ScorerIn, session: Session = Depends(get_session)):
+    code = _unique_code(session)
+    scorer = Scorer(name=data.name.strip(), code_hash=hash_code(code))
+    session.add(scorer)
+    session.commit()
+    return _scorer_out(scorer, code)
+
+
+@protected.post("/scorers/{scorer_id}/regenerate")
+def regenerate_scorer(scorer_id: int, session: Session = Depends(get_session)):
+    scorer = _get_scorer(session, scorer_id)
+    code = _unique_code(session)
+    scorer.code_hash = hash_code(code)
+    scorer.active = True
+    session.commit()
+    return _scorer_out(scorer, code)
+
+
+@protected.post("/scorers/{scorer_id}/revoke")
+def revoke_scorer(scorer_id: int, session: Session = Depends(get_session)):
+    scorer = _get_scorer(session, scorer_id)
+    scorer.active = False
+    session.commit()
+    return _scorer_out(scorer)
+
+
+@protected.post("/scorers/{scorer_id}/activate")
+def activate_scorer(scorer_id: int, session: Session = Depends(get_session)):
+    scorer = _get_scorer(session, scorer_id)
+    scorer.active = True
+    session.commit()
+    return _scorer_out(scorer)
+
+
+@protected.delete("/scorers/{scorer_id}")
+def delete_scorer(scorer_id: int, session: Session = Depends(get_session)):
+    session.delete(_get_scorer(session, scorer_id))
+    session.commit()
+    return {"ok": True}
+
+
+# --- resultados provisionales -----------------------------------------------------
+
+@protected.get("/provisional")
+def list_provisional(session: Session = Depends(get_session)):
+    names = {c.id: c.name for c in session.scalars(select(Category)).all()}
+    rows = session.scalars(select(ProvisionalResult).order_by(ProvisionalResult.updated_at.desc())).all()
+    return [
+        {"id": p.id, "category": names.get(p.category_id), "round_no": p.round_no, "home": p.home, "away": p.away,
+         **provisional_out(p)}
+        for p in rows
+    ]
+
+
+@protected.delete("/provisional/{provisional_id}")
+def delete_provisional(provisional_id: int, session: Session = Depends(get_session)):
+    prov = session.get(ProvisionalResult, provisional_id)
+    if prov:
+        session.delete(prov)
+        session.commit()
+    return {"ok": True}

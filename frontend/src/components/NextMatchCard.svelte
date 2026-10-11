@@ -3,9 +3,12 @@
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
   import { formatDay, formatTime, mapsUrl, shortTeam } from '../lib/format.js';
+  import { go } from '../lib/router.js';
   import { shareMatch } from '../lib/share.js';
 
   let { match, category } = $props();
+  // "Llevar marcador" solo el día del partido
+  const today = $derived(match.starts_at && formatDay(match.starts_at) === 'Hoy');
 </script>
 
 <article class="next">
@@ -41,6 +44,11 @@
       </a>
     {:else}
       <span class="venue"><Icon name="pin" size={16} /> Pabellón por confirmar</span>
+    {/if}
+    {#if today}
+      <button class="scorer-btn" onclick={() => go(`/marcador?pick=${match.id}`)}>
+        <Icon name="score" size={17} /> Marcador
+      </button>
     {/if}
     <button class="share" onclick={() => shareMatch(category, match)} aria-label="Compartir partido">
       <Icon name="share" size={18} />
@@ -158,6 +166,19 @@
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+  .scorer-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
   }
   .share {
     flex: none;

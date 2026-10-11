@@ -5,7 +5,6 @@
   import { resource } from './lib/api.js';
   import { fade, reduced } from './lib/motion.js';
   import { route } from './lib/router.js';
-  import Admin from './routes/admin/Admin.svelte';
   import Categories from './routes/Categories.svelte';
   import Category from './routes/Category.svelte';
   import Club from './routes/Club.svelte';
@@ -17,6 +16,7 @@
     if (first === 'categorias') return { page: 'categories', nav: 'categories' };
     if (first === 'c' && second) return { page: 'category', nav: 'categories', slug: second };
     if (first === 'club') return { page: 'club', nav: 'club' };
+    if (first === 'marcador') return { page: 'marcador', nav: 'marcador' };
     if (first === 'admin') return { page: 'admin', nav: null };
     return { page: 'home', nav: 'home' };
   });
@@ -78,8 +78,11 @@
       <Category slug={view.slug} />
     {:else if view.page === 'club'}
       <Club />
+    {:else if view.page === 'marcador'}
+      <!-- Marcador y admin se cargan aparte: la portada no paga su peso -->
+      {#await import('./routes/Scoreboard.svelte') then m}<m.default />{/await}
     {:else if view.page === 'admin'}
-      <Admin />
+      {#await import('./routes/admin/Admin.svelte') then m}<m.default />{/await}
     {/if}
   </main>
 {/key}

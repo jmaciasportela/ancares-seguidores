@@ -9,6 +9,7 @@
   import FeedbackAdmin from './FeedbackAdmin.svelte';
   import LogsAdmin from './LogsAdmin.svelte';
   import SharedUpload from './SharedUpload.svelte';
+  import ScorersAdmin from './ScorersAdmin.svelte';
   import TeamsAdmin from './TeamsAdmin.svelte';
 
   let authed = $state(null); // null = comprobando
@@ -47,6 +48,7 @@
   const tabs = [
     { id: 'categorias', label: 'Categorías', icon: 'trophy' },
     { id: 'equipos', label: 'Equipos', icon: 'ball' },
+    { id: 'anotadores', label: 'Anotadores', icon: 'key' },
     { id: 'feedback', label: 'Feedback', icon: 'inbox' },
     { id: 'registro', label: 'Registro', icon: 'list' },
   ];
@@ -92,6 +94,8 @@
           <CategoriesAdmin />
         {:else if tab === 'equipos'}
           <TeamsAdmin />
+        {:else if tab === 'anotadores'}
+          <ScorersAdmin />
         {:else if tab === 'feedback'}
           <FeedbackAdmin />
         {:else}

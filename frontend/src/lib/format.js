@@ -68,20 +68,28 @@ export function teamHue(name) {
   return h;
 }
 
-export function setsText(m) {
-  return m.played ? `${m.home_sets} - ${m.away_sets}` : '';
+/**
+ * Resultado a mostrar: el oficial de la FVCL o, si aún no hay, el provisional
+ * publicado desde el marcador (marcado con `provisional: true`).
+ */
+export function scoreOf(m) {
+  if (m.played) return { home: m.home_sets, away: m.away_sets, partials: m.partials || [], provisional: false };
+  const p = m.provisional;
+  if (!p) return null;
+  return { home: p.home_sets, away: p.away_sets, partials: p.partials || [], provisional: true, by: p.by, early: p.finished_early };
 }
 
-export function partialsText(m) {
-  return (m.partials || []).map(([a, b]) => `${a}-${b}`).join(' · ');
+/** "25-20 · 23-25 · 12-8*" (asterisco: set sin terminar) */
+export function partialsText(score) {
+  return (score?.partials || []).map(([a, b, done = true]) => `${a}-${b}${done ? '' : '*'}`).join(' · ');
 }
 
-/** ¿Ganó Ancares? true / false / null (si no es nuestro o no se jugó) */
+/** ¿Ganó Ancares? true / false / null (si no es nuestro, no se jugó o hubo empate) */
 export function ourOutcome(m, isOurs) {
-  if (!m.played || !m.is_ours) return null;
-  const homeOurs = isOurs(m.home);
-  const diff = m.home_sets - m.away_sets;
-  return homeOurs ? diff > 0 : diff < 0;
+  const score = scoreOf(m);
+  if (!score || !m.is_ours || score.home === score.away) return null;
+  const diff = score.home - score.away;
+  return isOurs(m.home) ? diff > 0 : diff < 0;
 }
 
 export const isOursName = (name) => /ancares/i.test(name || '');

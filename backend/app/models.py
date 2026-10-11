@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -24,6 +24,8 @@ class Category(Base):
     calendar_url: Mapped[Optional[str]] = mapped_column(String(500))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Formato de puntuación para el marcador (ver scoring_format.py); None = por defecto
+    score_format: Mapped[Optional[dict]] = mapped_column(JSON)
 
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     data_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -121,3 +123,43 @@ class Team(Base):
     logo_source: Mapped[Optional[str]] = mapped_column(String(20))  # manual | fvcl
     logo_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     logo_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))  # última búsqueda en FVCL
+
+
+class Scorer(Base):
+    """Persona autorizada a publicar resultados provisionales (código de anotador)."""
+
+    __tablename__ = "scorers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class ProvisionalResult(Base):
+    """Resultado anotado desde el marcador, válido hasta que la FVCL publique el oficial.
+
+    Se identifica el partido por clave natural (categoría, jornada, equipos) porque
+    los partidos se borran y se vuelven a crear en cada importación del calendario.
+    """
+
+    __tablename__ = "provisional_results"
+    __table_args__ = (UniqueConstraint("category_id", "round_no", "home_key", "away_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    home: Mapped[str] = mapped_column(String(200))
+    away: Mapped[str] = mapped_column(String(200))
+    home_key: Mapped[str] = mapped_column(String(200))
+    away_key: Mapped[str] = mapped_column(String(200))
+    home_sets: Mapped[int] = mapped_column(Integer)
+    away_sets: Mapped[int] = mapped_column(Integer)
+    partials: Mapped[list] = mapped_column(JSON, default=list)  # [[local, visitante, terminado], ...]
+    finished_early: Mapped[bool] = mapped_column(Boolean, default=False)
+    scorer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scorers.id", ondelete="SET NULL"))
+    published_by: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

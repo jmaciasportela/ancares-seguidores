@@ -29,6 +29,7 @@ cd frontend
 npm install
 npm run dev        # http://localhost:5173 (redirige /api al backend)
 npm run build      # genera frontend/dist, que el backend sirve en http://localhost:8000
+npm test           # tests de la lógica del marcador (vitest)
 ```
 
 El panel de admin está en `/#/admin` y no aparece en el menú.
@@ -86,6 +87,20 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
 6. **Feedback:** aquí aparecen los comentarios que mandan las familias desde la pestaña *Club*.
 
 > La app no se hace pasar por un navegador y descarga como mucho una vez al día por enlace. Si la federación pide que no se acceda así, pon `POW_ENABLED=false` y usa la subida manual.
+
+## Marcador y resultados provisionales
+
+La pestaña **Marcador** permite llevar el tanteo de un partido con un toque por punto. Sigue la normativa FIVB/RFEVB:
+- **Sets:** se ganan al llegar a 25 (o 15) con 2 puntos de diferencia y sin tope. El set decisivo se juega a 15 y, en él, la app avisa del cambio de campo a los 8 puntos.
+- **Formatos:** al mejor de 3 o de 5, o un número fijo de sets.
+- **Formato por categoría:** el admin lo fija al editar la categoría y se puede cambiar antes de empezar el partido.
+
+El partido en curso se guarda en el móvil, así que no se pierde si se cierra la app. Se puede deshacer, corregir el marcador, cambiar los lados y terminar en cualquier momento. Al acabar, la app propone el partido de liga más cercano por día y hora.
+
+**Quién puede publicar:**
+- **Cualquiera:** puede usar el marcador y compartir el resultado por WhatsApp.
+- **Anotadores:** publican el resultado en la app como **provisional**. El admin les crea un código en la pestaña *Anotadores* (se muestra una sola vez) y ellos lo introducen en la app, en *Club → Funciones extra*. Revocar un anotador lo desactiva al momento en todos sus móviles. El admin también puede publicar.
+- **Qué se publica:** el resultado aparece con la etiqueta «Provisional · pendiente de confirmar por la federación», no cuenta para la clasificación y desaparece en cuanto la FVCL publica el oficial. Desde el admin se pueden ver y borrar.
 
 ## Particularidades de los Excel de la FVCL (Clupik)
 

@@ -1,15 +1,17 @@
-import { formatWhen, partialsText } from './format.js';
+import { formatWhen, partialsText, scoreOf } from './format.js';
 import { toast } from './toast.js';
 
 const APP_URL = location.origin;
 
 function matchText(category, m) {
-  if (m.played) {
-    const partials = partialsText(m);
+  const score = scoreOf(m);
+  if (score) {
+    const partials = partialsText(score);
     return [
       `🏐 ${category} · ${m.round_name}`,
-      `${m.home} ${m.home_sets} - ${m.away_sets} ${m.away}`,
+      `${m.home} ${score.home} - ${score.away} ${m.away}`,
       partials ? `(${partials})` : '',
+      score.provisional ? '⏳ Resultado provisional, pendiente de la federación' : '',
       '',
       '¡Vamos Ancares! 💚🖤',
     ]
@@ -28,9 +30,8 @@ function matchText(category, m) {
     .join('\n');
 }
 
-/** Comparte con la hoja nativa del móvil; si no existe, abre WhatsApp. */
-export async function shareMatch(category, m) {
-  const text = matchText(category, m);
+/** Comparte texto con la hoja nativa del móvil; si no existe, abre WhatsApp. */
+export async function shareText(text) {
   if (navigator.share) {
     try {
       await navigator.share({ title: 'Ancares Seguidores', text, url: APP_URL });
@@ -49,6 +50,23 @@ export async function shareMatch(category, m) {
       toast('No se pudo compartir', 'error');
     }
   }
+}
+
+export function shareMatch(category, m) {
+  return shareText(matchText(category, m));
+}
+
+/** Resultado del marcador: {title, home, away, homeSets, awaySets, partials, provisional} */
+export function shareScore(r) {
+  const lines = [
+    `🏐 ${r.title}`,
+    `${r.home} ${r.homeSets} - ${r.awaySets} ${r.away}`,
+    r.partials ? `(${r.partials})` : '',
+    r.provisional ? '⏳ Resultado provisional, pendiente de la federación' : '',
+    '',
+    '¡Vamos Ancares! 💚🖤',
+  ];
+  return shareText(lines.filter((l, i, a) => l || a[i - 1]).join('\n'));
 }
 
 export async function shareApp() {

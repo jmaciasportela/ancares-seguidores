@@ -1,5 +1,7 @@
 <script>
   import { untrack } from 'svelte';
+  import FormatPicker from '../../components/FormatPicker.svelte';
+  import { DEFAULT_FORMAT } from '../../lib/scoring.js';
 
   let { initial = null, onSave, onCancel } = $props();
 
@@ -12,6 +14,7 @@
     calendar_url: init.calendar_url ?? '',
     sort_order: init.sort_order ?? 0,
     active: init.active ?? true,
+    score_format: init.score_format ?? { ...DEFAULT_FORMAT },
   });
   let busy = $state(false);
 
@@ -44,6 +47,11 @@
     <label for="c-cal">Enlace Excel de calendario</label>
     <input id="c-cal" class="input" type="url" inputmode="url" bind:value={f.calendar_url} placeholder="https://fvcl.es/es/tournament/…/calendar/…/all/export-xls" />
   </div>
+  <div class="field">
+    <span class="label">Formato del marcador</span>
+    <FormatPicker bind:value={f.score_format} />
+    <span class="hint">El Marcador lo propone al anotar partidos de esta categoría (se puede cambiar antes de empezar).</span>
+  </div>
   <div class="row">
     <div class="field">
       <label for="c-order">Orden</label>
@@ -63,6 +71,11 @@
 <style>
   .form {
     padding: 4px 0;
+  }
+  .label {
+    font-size: 13.5px;
+    font-weight: 650;
+    color: var(--muted);
   }
   .row {
     display: grid;

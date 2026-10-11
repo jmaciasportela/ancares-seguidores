@@ -1,7 +1,9 @@
+import hashlib
 import hmac
+import secrets
 import time
 from collections import defaultdict, deque
-from typing import Deque, Dict
+from typing import Deque, Dict, Optional
 
 from fastapi import HTTPException, Request, Response
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -49,6 +51,56 @@ def is_admin(request: Request) -> bool:
 def require_admin(request: Request) -> None:
     if not is_admin(request):
         raise HTTPException(status_code=401, detail="Necesitas iniciar sesión")
+
+
+# --- anotadores -------------------------------------------------------------
+
+SCORER_COOKIE = "ancares_scorer"
+SCORER_MAX_AGE = 60 * 60 * 24 * 365
+CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sin 0/O ni 1/I
+
+
+def _scorer_serializer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(get_settings().secret_key, salt="scorer-session")
+
+
+def new_scorer_code() -> str:
+    """Código legible tipo K7PQ-4XMW (8 caracteres, ~40 bits)."""
+    raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
+    return f"{raw[:4]}-{raw[4:]}"
+
+
+def hash_code(code: str) -> str:
+    """Normaliza (mayúsculas, sin guiones ni espacios) y calcula el hash."""
+    clean = "".join(c for c in code.upper() if c.isalnum())
+    return hashlib.sha256(clean.encode()).hexdigest()
+
+
+def set_scorer_session(response: Response, scorer_id: int) -> None:
+    response.set_cookie(
+        SCORER_COOKIE,
+        _scorer_serializer().dumps({"sid": scorer_id}),
+        max_age=SCORER_MAX_AGE,
+        httponly=True,
+        secure=get_settings().cookie_secure,
+        samesite="strict",
+    )
+
+
+def clear_scorer_session(response: Response) -> None:
+    response.delete_cookie(SCORER_COOKIE)
+
+
+def scorer_id_from(request: Request) -> Optional[int]:
+    token = request.cookies.get(SCORER_COOKIE)
+    if not token:
+        return None
+    try:
+        data = _scorer_serializer().loads(token, max_age=SCORER_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    sid = data.get("sid")
+    return sid if isinstance(sid, int) else None
 
 
 class RateLimiter:

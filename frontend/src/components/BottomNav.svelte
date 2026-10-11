@@ -6,6 +6,7 @@
   const items = [
     { id: 'home', href: '#/', icon: 'home', label: 'Inicio' },
     { id: 'categories', href: '#/categorias', icon: 'trophy', label: 'Categorías' },
+    { id: 'marcador', href: '#/marcador', icon: 'score', label: 'Marcador' },
     { id: 'club', href: '#/club', icon: 'club', label: 'Club' },
   ];
   const index = $derived(Math.max(0, items.findIndex((i) => i.id === active)));
@@ -36,7 +37,7 @@
   .inner {
     pointer-events: auto;
     position: relative;
-    max-width: 420px;
+    max-width: 460px;
     margin: 0 auto;
     height: var(--nav-h);
     display: grid;

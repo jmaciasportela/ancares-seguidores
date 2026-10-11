@@ -74,12 +74,12 @@
   });
   const nextRound = $derived.by(() => {
     const now = Date.now() - 3 * 3600e3;
-    const pending = matches.filter((m) => !m.is_bye && !m.played);
+    const pending = matches.filter((m) => !m.is_bye && !m.played && !m.provisional);
     const upcoming = pending.find((m) => m.starts_at && new Date(m.starts_at).getTime() >= now);
     return (upcoming || pending[0])?.round_no ?? null;
   });
   const played = $derived(
-    visible.filter((m) => m.played).sort((a, b) => b.round_no - a.round_no || (b.starts_at || '').localeCompare(a.starts_at || '')),
+    visible.filter((m) => m.played || m.provisional).sort((a, b) => b.round_no - a.round_no || (b.starts_at || '').localeCompare(a.starts_at || '')),
   );
 
   // Al abrir el calendario, saltar a la próxima jornada

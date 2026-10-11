@@ -1,6 +1,8 @@
 <script>
   import Icon from '../components/Icon.svelte';
+  import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
+  import { joinScorer, leaveScorer, refreshScorer, scorer } from '../lib/scorer.js';
   import { fly, pop } from '../lib/motion.js';
   import { shareApp } from '../lib/share.js';
   import { toast } from '../lib/toast.js';
@@ -21,6 +23,25 @@
   let form = $state({ kind: 'mejora', name: '', contact: '', message: '', website: '' });
   let sending = $state(false);
   let sent = $state(false);
+
+  // --- funciones extra: código de anotador ---
+  let code = $state('');
+  let joining = $state(false);
+  onMount(refreshScorer);
+
+  async function join(e) {
+    e.preventDefault();
+    joining = true;
+    try {
+      const r = await joinScorer(code);
+      code = '';
+      toast(`¡Hola, ${r.name}! Ya puedes publicar resultados provisionales`, 'ok', 4000);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      joining = false;
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -109,6 +130,36 @@
       </button>
     </form>
   {/if}
+
+  <h2 class="section-title">Funciones extra</h2>
+  <div class="card extra">
+    {#if $scorer.scorer}
+      <div class="extra-on">
+        <span class="key"><Icon name="key" size={20} /></span>
+        <div>
+          <b>Eres anotador/a: {$scorer.name}</b>
+          <p class="muted">Puedes publicar resultados provisionales desde el <a href="#/marcador">Marcador</a>.</p>
+        </div>
+      </div>
+      <button class="btn small ghost" onclick={leaveScorer}>Desactivar en este móvil</button>
+    {:else}
+      <p class="muted">¿Te ha dado el administrador un código de anotador? Introdúcelo aquí para publicar resultados provisionales desde el Marcador.</p>
+      <form class="code-form" onsubmit={join}>
+        <input
+          class="input code"
+          bind:value={code}
+          placeholder="XXXX-XXXX"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          maxlength="12"
+          aria-label="Código de anotador"
+          required
+        />
+        <button class="btn primary" disabled={joining || code.trim().length < 4}>{joining ? '…' : 'Activar'}</button>
+      </form>
+    {/if}
+  </div>
 
   <p class="footer muted">Hecho con 💚 por familias del club · v{version}</p>
 </div>
@@ -252,6 +303,42 @@
   }
   .big {
     font-size: 40px;
+  }
+  .extra {
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+    font-size: 14.5px;
+  }
+  .extra p {
+    margin: 0;
+  }
+  .extra-on {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .key {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    background: var(--brand);
+    color: #fff;
+  }
+  .code-form {
+    display: flex;
+    gap: 8px;
+  }
+  .code {
+    flex: 1;
+    min-width: 0;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
   .footer {
     text-align: center;

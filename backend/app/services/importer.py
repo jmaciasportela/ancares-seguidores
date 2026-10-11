@@ -13,6 +13,7 @@ from ..parsers.calendar import parse_calendar, split_teams
 from ..parsers.common import ParseError, detect_kind, norm, read_rows
 from ..parsers.ranking import parse_ranking
 from .logos import ensure_teams
+from .provisional import drop_superseded
 
 
 @dataclass
@@ -126,4 +127,5 @@ def _store_calendar(session: Session, category: Category, rows) -> int:
         )
     session.flush()
     session.expire(category, ["matches"])
+    drop_superseded(session, category)  # la FVCL ya publicó esos resultados
     return len(parsed)

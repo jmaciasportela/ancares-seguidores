@@ -1,13 +1,14 @@
 <script>
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
-  import { formatWhen, isOursName, mapsUrl, ourOutcome, partialsText, shortTeam } from '../lib/format.js';
+  import { formatWhen, isOursName, mapsUrl, ourOutcome, partialsText, scoreOf, shortTeam } from '../lib/format.js';
   import { shareMatch } from '../lib/share.js';
 
   let { match, category, showRound = false } = $props();
   const outcome = $derived(ourOutcome(match, isOursName));
-  const homeWon = $derived(match.played && match.home_sets > match.away_sets);
-  const awayWon = $derived(match.played && match.away_sets > match.home_sets);
+  const score = $derived(scoreOf(match));
+  const homeWon = $derived(score && score.home > score.away);
+  const awayWon = $derived(score && score.away > score.home);
 </script>
 
 {#if match.is_bye}
@@ -23,12 +24,12 @@
         <div class="team" class:won={homeWon}>
           <TeamBadge name={match.home} logo={match.home_logo} size={26} />
           <span class="ellipsis">{shortTeam(match.home)}</span>
-          {#if match.played}<b class="sets">{match.home_sets}</b>{/if}
+          {#if score}<b class="sets">{score.home}</b>{/if}
         </div>
         <div class="team" class:won={awayWon}>
           <TeamBadge name={match.away} logo={match.away_logo} size={26} />
           <span class="ellipsis">{shortTeam(match.away)}</span>
-          {#if match.played}<b class="sets">{match.away_sets}</b>{/if}
+          {#if score}<b class="sets">{score.away}</b>{/if}
         </div>
       </div>
       {#if match.is_ours}
@@ -38,11 +39,17 @@
       {/if}
     </div>
     <div class="meta">
-      {#if match.played}
+      {#if score}
+        {#if score.provisional}
+          <span class="pill prov" title="Anotado por {score.by}">Provisional</span>
+        {/if}
         {#if outcome !== null}
           <span class="pill" class:w={outcome} class:l={!outcome}>{outcome ? 'Victoria' : 'Derrota'}</span>
         {/if}
-        {#if match.partials?.length}<span class="partials">{partialsText(match)}</span>{/if}
+        {#if score.partials.length}<span class="partials">{partialsText(score)}</span>{/if}
+        {#if score.provisional}
+          <span class="prov-note">Pendiente de confirmar por la federación{score.early ? ' · terminado antes de tiempo' : ''}</span>
+        {/if}
       {:else}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>
         {#if match.venue}
@@ -182,5 +189,19 @@
   }
   .partials {
     font-variant-numeric: tabular-nums;
+  }
+  .pill.prov {
+    background: rgba(242, 165, 22, 0.16);
+    color: #a86a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    .pill.prov {
+      color: #f5b94a;
+    }
+  }
+  .prov-note {
+    flex-basis: 100%;
+    font-size: 12px;
+    font-style: italic;
   }
 </style>
