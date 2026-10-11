@@ -101,6 +101,27 @@ Como los pabellones no traen coordenadas, la ubicación es aproximada por ciudad
 
 La tarjeta indica siempre para qué ciudad es la previsión. Los pabellones habituales sin ciudad en el nombre se añaden en `VENUE_HINTS` (`backend/app/services/weather.py`).
 
+## Compartir imagen
+
+Los botones de compartir (resultados, tarjeta del próximo partido y resumen del marcador) abren un panel con la imagen generada en el propio móvil (Canvas 2D, sin servidor).
+- **Formatos:** *Historia* (1080×1920, para las historias de Instagram) o *Cuadrado* (1080×1080).
+- **Resultado:** titular desde el punto de vista de Ancares (¡VICTORIA!, DERROTA o EMPATE), escudos, sets, parciales y la banda «Resultado provisional» si aún no es oficial.
+- **Previa:** día, hora, pabellón y previsión del tiempo.
+
+Con «Compartir imagen» se usa la hoja nativa del móvil; si el navegador no permite compartir ficheros, la imagen se descarga. También se puede compartir *solo texto*. El código está en `src/lib/shareImage.js` y se carga bajo demanda.
+
+## Estadísticas
+
+La pestaña **Estadísticas** de cada categoría muestra:
+- la racha de Ancares (últimos 5 partidos, con los provisionales en ámbar);
+- posición, puntos, % de sets ganados y puntos por set;
+- la gráfica **«Posición por jornada»**: la línea de Ancares destacada sobre las del resto de equipos; se toca para ver el detalle y tiene tabla de datos;
+- curiosidades: set más largo, victoria más clara y mejor racha.
+
+El Excel solo trae la clasificación actual, así que la evolución se reconstruye con los resultados del calendario y la puntuación de la FVCL: 3 puntos por ganar sin llegar al set decisivo, 2 por ganarlo en el decisivo, 1 por perderlo en el decisivo y 0 en otro caso. Si no cuadra con la tabla oficial, se avisa de que es aproximada.
+
+En **Clasificación**, si hay resultados provisionales, el interruptor «Incluir resultados provisionales» muestra una tabla orientativa con flechas en los equipos que suben o bajan. A igualdad de puntos se respeta el orden oficial.
+
 ## Marcador y resultados provisionales
 
 La pestaña **Marcador** permite llevar el tanteo de un partido con un toque por punto. Sigue la normativa FIVB/RFEVB:

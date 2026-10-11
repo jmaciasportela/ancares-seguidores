@@ -5,7 +5,9 @@
   import WeatherChip from './WeatherChip.svelte';
   import { formatDay, formatTime, mapsUrl, shortTeam } from '../lib/format.js';
   import { go } from '../lib/router.js';
-  import { shareMatch } from '../lib/share.js';
+  import { matchText } from '../lib/share.js';
+  import { openShare } from '../lib/shareSheet.js';
+  import { dataFromMatch } from '../lib/shareData.js';
 
   let { match, category } = $props();
   // "Llevar marcador" solo el día del partido
@@ -52,7 +54,7 @@
         <Icon name="score" size={17} /> Marcador
       </button>
     {/if}
-    <button class="share" onclick={() => shareMatch(category, match)} aria-label="Compartir partido">
+    <button class="share" onclick={() => openShare(dataFromMatch(match, category), matchText(category, match))} aria-label="Compartir partido">
       <Icon name="share" size={18} />
     </button>
   </footer>

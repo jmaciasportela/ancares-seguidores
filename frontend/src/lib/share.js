@@ -3,7 +3,7 @@ import { toast } from './toast.js';
 
 const APP_URL = location.origin;
 
-function matchText(category, m) {
+export function matchText(category, m) {
   const score = scoreOf(m);
   if (score) {
     const partials = partialsText(score);
@@ -52,12 +52,8 @@ export async function shareText(text) {
   }
 }
 
-export function shareMatch(category, m) {
-  return shareText(matchText(category, m));
-}
-
-/** Resultado del marcador: {title, home, away, homeSets, awaySets, partials, provisional} */
-export function shareScore(r) {
+/** Texto del resultado del marcador: {title, home, away, homeSets, awaySets, partials, provisional} */
+export function scoreText(r) {
   const lines = [
     `🏐 ${r.title}`,
     `${r.home} ${r.homeSets} - ${r.awaySets} ${r.away}`,
@@ -66,7 +62,7 @@ export function shareScore(r) {
     '',
     '¡Vamos Ancares! 💚🖤',
   ];
-  return shareText(lines.filter((l, i, a) => l || a[i - 1]).join('\n'));
+  return lines.filter((l, i, a) => l || a[i - 1]).join('\n');
 }
 
 export async function shareApp() {

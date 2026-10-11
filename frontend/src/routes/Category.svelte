@@ -14,10 +14,37 @@
     { id: 'clasificacion', label: 'Clasificación' },
     { id: 'calendario', label: 'Calendario' },
     { id: 'resultados', label: 'Resultados' },
+    { id: 'estadisticas', label: 'Estadísticas' },
   ];
 
   const res = $derived(resource(`/api/categories/${slug}`));
   const data = $derived($res.data);
+
+  // Clasificación provisional: solo se pide si hay resultados provisionales
+  const hasProvisional = $derived(!!data?.matches?.some((m) => m.provisional));
+  const statsRes = $derived(hasProvisional ? resource(`/api/categories/${slug}/stats`) : null);
+  const provisionalTable = $derived(statsRes ? $statsRes?.data?.provisional_table : null);
+  let withProvisional = $state(false);
+
+  // Indicador de la pestaña activa: se mide porque las pestañas tienen anchos distintos
+  let tabEls = $state([]);
+  let ind = $state({ left: 4, width: 0 });
+  function measure() {
+    const el = tabEls[tabIndex];
+    if (el) {
+      ind = { left: el.offsetLeft, width: el.offsetWidth };
+      el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+  $effect(() => {
+    tabIndex;
+    tabEls.length;
+    measure();
+  });
+  $effect(() => {
+    addEventListener('resize', measure);
+    return () => removeEventListener('resize', measure);
+  });
   const tab = $derived(TABS.some((t) => t.id === $route.query.get('t')) ? $route.query.get('t') : 'clasificacion');
   const tabIndex = $derived(TABS.findIndex((t) => t.id === tab));
   let direction = $state(1);
@@ -105,10 +132,10 @@
       <span class="pos">{data.our_position}º</span>
     {/if}
   </div>
-  <div class="tabs" role="tablist" style="--i:{tabIndex}">
-    <span class="ind"></span>
-    {#each TABS as t}
-      <button role="tab" aria-selected={tab === t.id} class:active={tab === t.id} onclick={() => setTab(t.id)}>{t.label}</button>
+  <div class="tabs" role="tablist">
+    <span class="ind" style="transform:translateX({ind.left}px);width:{ind.width}px"></span>
+    {#each TABS as t, i}
+      <button bind:this={tabEls[i]} role="tab" aria-selected={tab === t.id} class:active={tab === t.id} onclick={() => setTab(t.id)}>{t.label}</button>
     {/each}
   </div>
 </div>
@@ -126,11 +153,23 @@
       <div class="pane" in:fly={{ x: 40 * direction, y: 0, duration: 320 }}>
         {#if tab === 'clasificacion'}
           {#if data.standings.length}
-            <StandingsTable standings={data.standings} />
+            {#if provisionalTable}
+              <label class="toggle">
+                <input type="checkbox" bind:checked={withProvisional} />
+                <span class="sw"></span>
+                Incluir resultados provisionales
+              </label>
+              {#if withProvisional}
+                <p class="prov-note">⏳ Clasificación orientativa con resultados aún sin confirmar por la federación.</p>
+              {/if}
+            {/if}
+            <StandingsTable standings={withProvisional && provisionalTable ? provisionalTable : data.standings} />
             <p class="legend muted">Pts: puntos · PJ: jugados · G: ganados · P: perdidos<span class="sets-legend"> · Sets: a favor - en contra</span></p>
           {:else}
             <div class="card empty">Aún no hay clasificación.</div>
           {/if}
+        {:else if tab === 'estadisticas'}
+          {#await import('./CategoryStats.svelte') then m}<m.default {slug} />{/await}
         {:else}
           <label class="toggle">
             <input type="checkbox" bind:checked={onlyOurs} />
@@ -231,28 +270,35 @@
   .tabs {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
     margin-top: 10px;
     padding: 4px;
     border-radius: 14px;
     background: var(--surface-2);
   }
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
   .ind {
     position: absolute;
     top: 4px;
     bottom: 4px;
-    left: 4px;
-    width: calc((100% - 8px) / 3);
+    left: 0;
     border-radius: 10px;
     background: var(--surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    transform: translateX(calc(var(--i) * 100%));
-    transition: transform 0.4s var(--spring);
+    transition: transform 0.4s var(--spring), width 0.4s var(--spring);
   }
   .tabs button {
     position: relative;
+    flex: 1 0 auto;
+    padding: 0 7px;
+    white-space: nowrap;
     min-height: 36px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 650;
     color: var(--muted);
     transition: color 0.2s;
@@ -263,6 +309,16 @@
   .content {
     min-height: 70vh;
     overflow-x: hidden;
+  }
+  .prov-note {
+    margin: -6px 2px 12px;
+    font-size: 12.5px;
+    color: #a86a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    .prov-note {
+      color: #f5b94a;
+    }
   }
   .legend {
     font-size: 12px;

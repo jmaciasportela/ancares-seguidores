@@ -11,7 +11,9 @@
   import { go, route } from '../lib/router.js';
   import { refreshScorer, scorer } from '../lib/scorer.js';
   import * as S from '../lib/scoring.js';
-  import { shareScore } from '../lib/share.js';
+  import { scoreText } from '../lib/share.js';
+  import { dataFromGame } from '../lib/shareData.js';
+  import { openShare } from '../lib/shareSheet.js';
   import { toast } from '../lib/toast.js';
 
   const KEY = 'ancares:marcador';
@@ -172,7 +174,12 @@
   $effect(() => {
     if (step !== 'summary' || assign !== null || loadingCandidates) return;
     const g = game.match;
-    const same = g && assignable.find((c) => c.category_id === g.category_id && c.round_no === g.round_no && c.home === g.home && c.away === g.away);
+    // Partido libre: se respeta la elección (se puede asignar a mano desde la lista)
+    if (!g) {
+      assign = 'none';
+      return;
+    }
+    const same = assignable.find((c) => c.category_id === g.category_id && c.round_no === g.round_no && c.home === g.home && c.away === g.away);
     const near = assignable.find((c) => Math.abs(new Date(c.starts_at) - game.startedAt) <= 6 * 3600e3);
     assign = (same || near)?.id ?? 'none';
   });
@@ -214,8 +221,9 @@
 
   function share() {
     const m = candidates.find((c) => c.id === assign);
-    shareScore({
-      title: m ? `${m.category} · ${m.round_name}` : 'Partido amistoso',
+    const title = m ? `${m.category} · ${m.round_name}` : 'Partido amistoso';
+    const text = scoreText({
+      title,
       home: game.home.name,
       away: game.away.name,
       homeSets: result.home_sets,
@@ -223,6 +231,7 @@
       partials: partialsText(result),
       provisional: !!m,
     });
+    openShare(dataFromGame(game, result, title, !!m), text);
   }
 
   function newGame() {

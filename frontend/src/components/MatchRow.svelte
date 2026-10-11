@@ -2,7 +2,9 @@
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
   import { formatWhen, isOursName, mapsUrl, ourOutcome, partialsText, scoreOf, shortTeam } from '../lib/format.js';
-  import { shareMatch } from '../lib/share.js';
+  import { matchText } from '../lib/share.js';
+  import { openShare } from '../lib/shareSheet.js';
+  import { dataFromMatch } from '../lib/shareData.js';
 
   let { match, category, showRound = false } = $props();
   const outcome = $derived(ourOutcome(match, isOursName));
@@ -33,7 +35,7 @@
         </div>
       </div>
       {#if match.is_ours}
-        <button class="share" onclick={() => shareMatch(category, match)} aria-label="Compartir">
+        <button class="share" onclick={() => openShare(dataFromMatch(match, category), matchText(category, match))} aria-label="Compartir">
           <Icon name="share" size={17} />
         </button>
       {/if}

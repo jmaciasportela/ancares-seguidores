@@ -29,6 +29,8 @@
       <span role="cell" class="team">
         <TeamBadge name={s.team} logo={s.logo} size={26} />
         <span class="ellipsis">{shortTeam(s.team)}</span>
+        {#if s.delta > 0}<span class="delta up" title="Sube {s.delta}">▲{s.delta}</span>{/if}
+        {#if s.delta < 0}<span class="delta down" title="Baja {-s.delta}">▼{-s.delta}</span>{/if}
       </span>
       <span role="cell" class="pts">{s.points}</span>
       <span role="cell">{s.played}</span>
@@ -75,6 +77,17 @@
   }
   .pts {
     font-weight: 800;
+  }
+  .delta {
+    flex: none;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .delta.up {
+    color: var(--brand-strong);
+  }
+  .delta.down {
+    color: var(--danger);
   }
   .sets {
     color: var(--muted);

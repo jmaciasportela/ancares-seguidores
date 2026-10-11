@@ -18,6 +18,13 @@ export function formatDay(iso, { long = false } = {}) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** "Domingo, 18 de octubre" (sin "Hoy"/"Mañana": para imágenes que se ven días después) */
+export function formatDateLong(iso) {
+  if (!iso) return 'Fecha por confirmar';
+  const s = longDayFmt.format(new Date(iso));
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export function formatTime(iso) {
   return iso ? timeFmt.format(new Date(iso)) : '';
 }

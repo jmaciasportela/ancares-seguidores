@@ -11,6 +11,8 @@ from ..models import Category, Match
 from ..serializers import Ctx, category_detail, category_summary, iso
 from ..services.logos import logo_map
 from ..services.provisional import provisional_map
+from ..services import stats
+from ..services.importer import is_ours
 from ..services.weather import forecast_for
 
 router = APIRouter(prefix="/api", tags=["public"])
@@ -65,6 +67,31 @@ def category(slug: str, request: Request, session: Session = Depends(get_session
     if not cat:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
     return cached_json(request, category_detail(cat, make_ctx(session)))
+
+
+@router.get("/categories/{slug}/stats")
+def category_stats(slug: str, request: Request, session: Session = Depends(get_session)):
+    cat = session.scalars(
+        select(Category)
+        .where(Category.slug == slug, Category.active.is_(True))
+        .options(selectinload(Category.standings), selectinload(Category.matches))
+    ).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    ctx = make_ctx(session)
+    key = stats.ours_key_of(cat, is_ours)
+    evo = stats.evolution(cat, key)
+    for t in evo["teams"]:
+        t["logo"] = ctx.logo(t["team"])
+    prov = stats.provisional_table(cat, key, ctx.provisional_for)
+    if prov:
+        for row in prov:
+            row["logo"] = ctx.logo(row["team"])
+    return cached_json(request, {
+        **evo,
+        "ours": stats.ours_stats(cat, key, ctx.provisional_for) if key else None,
+        "provisional_table": prov,
+    })
 
 
 @router.get("/weather/{match_id}")
