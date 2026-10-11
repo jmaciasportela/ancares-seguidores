@@ -12,6 +12,7 @@
   let email = $state(null);
   let testing = $state(false);
   let testError = $state(null);
+  let testOk = $state(false);
 
   onMount(async () => {
     try {
@@ -26,10 +27,11 @@
   async function testEmail() {
     testing = true;
     testError = null;
+    testOk = false;
     try {
       const r = await api('/api/admin/email/test', { method: 'POST' });
       email = r;
-      if (r.ok) toast(`Email de prueba enviado a ${r.to}`, 'ok', 4000);
+      if (r.ok) testOk = true;
       else testError = r.error;
     } catch (err) {
       testError = err.message;
@@ -54,7 +56,10 @@
     <div class="email-head">
       <Icon name="send" size={18} />
       {#if email.enabled}
-        <span>Avisos por email a <b>{email.to}</b> <span class="muted">({email.host}:{email.port}, {email.security})</span></span>
+        <span>
+          Avisos por email a <b>{email.to}</b>
+          <span class="muted">· de {email.from} · {email.host}:{email.port} ({email.security})</span>
+        </span>
       {:else}
         <span><b>Avisos por email desactivados.</b> Falta en el <code>.env</code>: {email.missing.join(', ')}</span>
       {/if}
@@ -63,6 +68,9 @@
       <button class="btn small" onclick={testEmail} disabled={testing}>{testing ? 'Enviando…' : 'Enviar email de prueba'}</button>
     {/if}
     {#if testError}<p class="email-error">{testError}</p>{/if}
+    {#if testOk}
+      <p class="email-ok">✓ El servidor aceptó el email. Si en unos minutos no llega, mira la carpeta de spam.</p>
+    {/if}
   </div>
 {/if}
 
@@ -121,6 +129,11 @@
   }
   .email .btn {
     justify-self: start;
+  }
+  .email-ok {
+    margin: 0;
+    color: var(--brand-strong);
+    font-size: 13.5px;
   }
   .email-error {
     margin: 0;

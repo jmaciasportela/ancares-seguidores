@@ -32,8 +32,10 @@ class FakeSMTP:
             raise smtplib.SMTPAuthenticationError(535, b"Username and Password not accepted")
         self.login_args = (user, password)
 
-    def send_message(self, msg):
+    def send_message(self, msg, from_addr=None, to_addrs=None):
         self.sent.append(msg)
+        self.envelope = (from_addr, to_addrs)
+        return {}
 
 
 class FakeSMTPSSL(FakeSMTP):
@@ -75,7 +77,27 @@ def test_test_email_starttls(client, smtp):
     conn = smtp[-1]
     assert (conn.host, conn.port, conn.tls, conn.ssl) == ("smtp.test", 587, True, False)
     assert conn.login_args == ("yo@test.es", "buena")
-    assert conn.sent[0]["To"] == "admin@test.es" and "prueba" in conn.sent[0]["Subject"]
+    msg = conn.sent[0]
+    assert msg["To"] == "admin@test.es" and "prueba" in msg["Subject"]
+    assert msg["Message-ID"] and msg["Date"]  # sin ellos Gmail lo rechaza
+    assert conn.envelope == ("yo@test.es", ["admin@test.es"])
+
+
+@pytest.mark.parametrize(
+    "smtp_from,expected",
+    [
+        ("Ancares Seguidores", "Ancares Seguidores <yo@test.es>"),  # solo nombre: buzón de SMTP_USER
+        ("avisos@test.es", "avisos@test.es"),
+        ("Club <avisos@test.es>", "Club <avisos@test.es>"),
+        (None, "yo@test.es"),
+    ],
+)
+def test_sender_header(client, smtp, monkeypatch, smtp_from, expected):
+    monkeypatch.setattr(get_settings(), "smtp_from", smtp_from)
+    login(client)
+    assert client.post("/api/admin/email/test").json()["from"] == expected
+    assert smtp[-1].sent[0]["From"] == expected
+    assert smtp[-1].envelope[0] == "yo@test.es"
 
 
 def test_ssl_on_port_465(client, smtp, monkeypatch):
@@ -93,8 +115,10 @@ def test_bad_password_is_explained(client, smtp, monkeypatch):
 
 
 def test_feedback_sends_email(client, smtp):
-    r = client.post("/api/feedback", json={"kind": "error", "message": "No carga el calendario", "name": "Luis"})
+    r = client.post("/api/feedback", json={"kind": "error", "message": "No carga el calendario", "name": "Luis",
+                                           "contact": "luis@correo.es"})
     assert r.status_code == 201
     sent = [m for conn in smtp for m in conn.sent]
     assert len(sent) == 1
     assert "Nuevo feedback" in sent[0]["Subject"] and "No carga el calendario" in sent[0].get_content()
+    assert sent[0]["Reply-To"] == "luis@correo.es"  # responder va directo a quien escribió

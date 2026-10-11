@@ -34,5 +34,6 @@ def create_feedback(
         f"Contacto: {fb.contact or '-'}\n\n"
         f"{fb.message}\n"
     )
-    background.add_task(send_admin_email, f"Nuevo feedback ({KIND_LABEL[fb.kind]})", body)
+    reply_to = fb.contact if fb.contact and "@" in fb.contact else None
+    background.add_task(send_admin_email, f"Nuevo feedback ({KIND_LABEL[fb.kind]})", body, reply_to)
     return {"ok": True}
