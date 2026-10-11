@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import get_settings
 from .db import init_db
 from .routers import admin, feedback, public, scoring
+from .services.mailer import email_enabled, missing_settings
 from .services.sync import start_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -18,6 +19,10 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    if not email_enabled():
+        logging.getLogger("app").warning(
+            "Avisos por email DESACTIVADOS: falta %s en el .env", ", ".join(missing_settings())
+        )
     scheduler = start_scheduler()
     yield
     if scheduler:

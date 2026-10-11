@@ -33,6 +33,7 @@ from ..services.logos import (
     sync_teams_from_standings,
 )
 from ..services.logos_fvcl import search_category_logos
+from ..services.mailer import email_status, send_test_email
 from ..services.sync import sync_categories
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -402,3 +403,16 @@ def delete_provisional(provisional_id: int, session: Session = Depends(get_sessi
         session.delete(prov)
         session.commit()
     return {"ok": True}
+
+
+# --- email ----------------------------------------------------------------------
+
+@protected.get("/email")
+def email_info():
+    return email_status()
+
+
+@protected.post("/email/test")
+def email_test():
+    ok, error = send_test_email()
+    return {"ok": ok, "error": error, **email_status()}

@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
     smtp_starttls: bool = True
+    # SSL directo (puerto 465). Sin definir: se activa solo si SMTP_PORT=465
+    smtp_ssl: Optional[bool] = None
     smtp_from: Optional[str] = None
     admin_email: Optional[str] = None
     public_url: str = "http://localhost:8000"
