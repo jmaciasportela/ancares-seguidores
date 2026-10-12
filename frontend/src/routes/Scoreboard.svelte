@@ -160,6 +160,8 @@
   let publishing = $state(false);
   let published = $state(null); // slug de la categoría publicada
   let confirmPublish = $state(false);
+  // Partido de liga elegido para asignar el resultado
+  const target = $derived(candidates.find((c) => c.id === assign) || null);
   let confirmNew = $state(false);
 
   // Partidos para asignar: primero los más cercanos a cuando empezó el marcador
@@ -212,8 +214,9 @@
       resource(`/api/categories/${r.category_slug}`).refresh();
       toast('Resultado provisional publicado', 'ok');
     } catch (err) {
-      toast(err.message, 'error', 5000);
+      toast(err.message, 'error', 6000);
       if (err.status === 401) refreshScorer();
+      if (err.status === 409) candidates = await api('/api/scoring/matches').catch(() => candidates);
     } finally {
       publishing = false;
     }
@@ -410,7 +413,7 @@
             <TeamBadge name={rivalOf(m)} logo={rivalLogo(m)} size={36} />
             <span class="info">
               <b class="ellipsis">vs {shortTeam(rivalOf(m))}</b>
-              <span class="muted ellipsis">{m.category} · {formatWhen(m.starts_at)}{m.provisional ? ' · ya tiene resultado provisional' : ''}</span>
+              <span class="muted ellipsis">{m.category} · {formatWhen(m.starts_at)}{m.provisional ? ` · ya publicado por ${m.provisional.by}` : ''}</span>
             </span>
           </button>
         {/each}
@@ -424,15 +427,30 @@
     {#if assign !== 'none' && assign !== null}
       <div class="notice card">
         <Icon name="info" size={20} />
-        <p><b>Resultado provisional.</b> El que vale es el que publique la federación en unos días; cuando llegue, sustituirá a este.</p>
+        {#if target?.tournament}
+          <p><b>Resultado provisional.</b> Contará en el torneo cuando lo confirme el admin.</p>
+        {:else}
+          <p><b>Resultado provisional.</b> El que vale es el que publique la federación en unos días; cuando llegue, sustituirá a este.</p>
+        {/if}
       </div>
       {#if published}
         <button class="btn primary wide" onclick={() => go(`/c/${published}?t=resultados`)}><Icon name="check" size={18} /> Publicado · ver resultados</button>
+      {:else if $scorer.can_publish && target?.provisional && !target.can_publish}
+        <!-- Manda el primer resultado publicado: solo su autor o el admin pueden cambiarlo -->
+        <p class="taken">
+          Ya hay un resultado provisional publicado por <b>{target.provisional.by}</b>
+          ({target.provisional.home_sets}-{target.provisional.away_sets}). Si no es correcto, pide al admin que lo borre.
+        </p>
       {:else if $scorer.can_publish}
+        {@const fixing = !!target?.provisional}
         {#if confirmPublish}
-          <button class="btn primary wide" onclick={publish} disabled={publishing}>{publishing ? 'Publicando…' : 'Sí, publicar como provisional'}</button>
+          <button class="btn primary wide" onclick={publish} disabled={publishing}>
+            {publishing ? 'Publicando…' : fixing ? 'Sí, sustituir el resultado' : 'Sí, publicar como provisional'}
+          </button>
         {:else}
-          <button class="btn primary wide" onclick={() => (confirmPublish = true)}><Icon name="upload" size={18} /> Publicar resultado provisional</button>
+          <button class="btn primary wide" onclick={() => (confirmPublish = true)}>
+            <Icon name="upload" size={18} /> {fixing ? 'Corregir el resultado provisional' : 'Publicar resultado provisional'}
+          </button>
         {/if}
       {:else}
         <p class="muted small">Para publicarlo en la app necesitas un <b>código de anotador</b>: pídeselo al administrador e introdúcelo en <a href="#/club">Club → Funciones extra</a>.</p>
@@ -720,6 +738,13 @@
   .wide {
     width: 100%;
     margin-top: 8px;
+  }
+  .taken {
+    margin: 0 0 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    font-size: 14px;
   }
   .row-btns {
     display: grid;

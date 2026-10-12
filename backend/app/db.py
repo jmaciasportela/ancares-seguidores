@@ -32,7 +32,7 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 # Columnas añadidas a tablas que ya existían en versiones anteriores.
 # create_all crea las tablas nuevas, pero no añade columnas a las existentes.
 ADDED_COLUMNS = {
-    "categories": {"score_format": "TEXT"},
+    "categories": {"score_format": "TEXT", "kind": "VARCHAR(20) DEFAULT 'league'"},
 }
 
 

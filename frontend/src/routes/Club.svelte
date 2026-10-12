@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
   import { joinScorer, leaveScorer, refreshScorer, scorer } from '../lib/scorer.js';
+  import { go } from '../lib/router.js';
   import { fly, pop } from '../lib/motion.js';
   import { shareApp } from '../lib/share.js';
   import { toast } from '../lib/toast.js';
@@ -28,6 +29,18 @@
   let code = $state('');
   let joining = $state(false);
   onMount(refreshScorer);
+
+  // Acceso al admin desde la app instalada (no hay barra de direcciones):
+  // 5 toques seguidos sobre la versión. Con sesión de admin, enlace visible.
+  let taps = [];
+  function tapVersion() {
+    const now = Date.now();
+    taps = [...taps.filter((t) => now - t < 2500), now];
+    if (taps.length >= 5) {
+      taps = [];
+      go('/admin');
+    }
+  }
 
   async function join(e) {
     e.preventDefault();
@@ -88,6 +101,7 @@
       <p><b>App no oficial.</b> No pertenece al club ni a la federación: la ha hecho un padre del equipo en su tiempo libre para que las familias sigamos a nuestras jugadoras.</p>
       <p>Los datos salen de la <a href="https://fvcl.es" target="_blank" rel="noopener">Federación de Voleibol de Castilla y León</a> y se actualizan dos veces al día. Puede haber retrasos o errores; <b>si hay dudas, manda la web oficial</b>.</p>
       <p class="muted small">Se ofrece tal cual, sin garantía de ningún tipo.</p>
+      <p class="muted small">Para saber cuántas familias la usan, la app envía un aviso anónimo (un número aleatorio del móvil, si está instalada y la versión). Sin nombres, sin IPs y sin publicidad; se borra a los 6 meses.</p>
     </div>
   </div>
 
@@ -161,7 +175,11 @@
     {/if}
   </div>
 
-  <p class="footer muted">Hecho con 💚 por familias del club · v{version}</p>
+  <p class="footer muted">
+    Hecho con 💚 por familias del club ·
+    <button class="version" onclick={tapVersion} aria-label="Versión {version}">v{version}</button>
+    {#if $scorer.admin}· <a href="#/admin">Administración</a>{/if}
+  </p>
 </div>
 
 <style>
@@ -339,6 +357,13 @@
     font-size: 18px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+  .version {
+    font: inherit;
+    color: inherit;
+    padding: 4px 2px;
+    -webkit-user-select: none;
+    user-select: none;
   }
   .footer {
     text-align: center;

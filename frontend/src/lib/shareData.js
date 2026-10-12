@@ -20,6 +20,7 @@ export function dataFromMatch(m, category) {
     awaySets: score?.away,
     partials: score?.partials || [],
     provisional: !!score?.provisional,
+    tournament: !!m.tournament,
     outcome: outcome === null ? (score && score.home === score.away ? 'draw' : null) : outcome ? 'win' : 'loss',
     weatherMatch: score ? null : m, // la previa lleva el tiempo
   };

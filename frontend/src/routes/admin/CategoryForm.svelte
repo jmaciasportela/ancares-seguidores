@@ -3,7 +3,7 @@
   import FormatPicker from '../../components/FormatPicker.svelte';
   import { DEFAULT_FORMAT } from '../../lib/scoring.js';
 
-  let { initial = null, onSave, onCancel } = $props();
+  let { initial = null, kind: initialKind = 'league', onSave, onCancel } = $props();
 
   // El formulario parte de una copia de `initial` y no debe seguir sus cambios
   const init = untrack(() => initial) || {};
@@ -15,14 +15,18 @@
     sort_order: init.sort_order ?? 0,
     active: init.active ?? true,
     score_format: init.score_format ?? { ...DEFAULT_FORMAT },
+    kind: init.kind ?? untrack(() => initialKind),
   });
+  const isTournament = $derived(f.kind === 'tournament');
   let busy = $state(false);
 
   async function submit(e) {
     e.preventDefault();
     busy = true;
     try {
-      await onSave({ ...f, sort_order: Number(f.sort_order) || 0 });
+      const data = { ...f, sort_order: Number(f.sort_order) || 0 };
+      if (data.kind === 'tournament') Object.assign(data, { fvcl_name: '', ranking_url: '', calendar_url: '' });
+      await onSave(data);
     } finally {
       busy = false;
     }
@@ -30,10 +34,19 @@
 </script>
 
 <form class="form" onsubmit={submit}>
+  <div class="kinds" role="radiogroup" aria-label="Tipo">
+    <button type="button" role="radio" aria-checked={!isTournament} class:on={!isTournament} onclick={() => (f.kind = 'league')}>
+      <b>Liga FVCL</b><span>Datos de los Excel de la federación</span>
+    </button>
+    <button type="button" role="radio" aria-checked={isTournament} class:on={isTournament} onclick={() => (f.kind = 'tournament')}>
+      <b>Torneo</b><span>Partidos y fechas a mano</span>
+    </button>
+  </div>
   <div class="field">
     <label for="c-name">Nombre visible</label>
-    <input id="c-name" class="input" bind:value={f.name} placeholder="Infantil Femenino" required maxlength="120" />
+    <input id="c-name" class="input" bind:value={f.name} placeholder={isTournament ? 'Torneo de Navidad' : 'Infantil Femenino'} required maxlength="120" />
   </div>
+  {#if !isTournament}
   <div class="field">
     <label for="c-fvcl">Nombre de la competición en la FVCL</label>
     <input id="c-fvcl" class="input" bind:value={f.fvcl_name} placeholder="CRE Infantil Femenino Liga Oro" maxlength="200" />
@@ -47,6 +60,7 @@
     <label for="c-cal">Enlace Excel de calendario</label>
     <input id="c-cal" class="input" type="url" inputmode="url" bind:value={f.calendar_url} placeholder="https://fvcl.es/es/tournament/…/calendar/…/all/export-xls" />
   </div>
+  {/if}
   <div class="field">
     <span class="label">Formato del marcador</span>
     <FormatPicker bind:value={f.score_format} />
@@ -71,6 +85,32 @@
 <style>
   .form {
     padding: 4px 0;
+  }
+  .kinds {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .kinds button {
+    display: grid;
+    gap: 2px;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1.5px solid var(--line);
+    background: var(--surface);
+  }
+  .kinds b {
+    font-size: 14.5px;
+  }
+  .kinds span {
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .kinds button.on {
+    border-color: var(--brand);
+    background: var(--brand-soft);
   }
   .label {
     font-size: 13.5px;

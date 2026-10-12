@@ -7,6 +7,7 @@
   import { fly, reduced } from '../../lib/motion.js';
   import { toast } from '../../lib/toast.js';
   import CategoryForm from './CategoryForm.svelte';
+  import TournamentMatches from './TournamentMatches.svelte';
 
   const STATUS = {
     ok: { label: 'Al día', cls: 'ok' },
@@ -20,6 +21,7 @@
   let loading = $state(true);
   let creating = $state(false);
   let editing = $state(null);
+  let matchesFor = $state(null); // torneo cuyos partidos se editan
   let confirmDelete = $state(null);
   let syncing = $state(null); // id o 'all'
   let uploading = $state(null);
@@ -110,10 +112,13 @@
   }
 </script>
 
+{#if matchesFor}
+  <TournamentMatches category={matchesFor} onBack={() => { matchesFor = null; load(); }} />
+{:else}
 <div class="toolbar">
   <button class="btn primary small" onclick={() => (creating = !creating)}>
     <Icon name={creating ? 'x' : 'plus'} size={16} />
-    {creating ? 'Cancelar' : 'Nueva categoría'}
+    {creating ? 'Cancelar' : 'Nueva liga o torneo'}
   </button>
   <button class="btn small" onclick={() => sync()} disabled={syncing !== null || !cats.length}>
     <Icon name="refresh" size={16} />
@@ -143,6 +148,23 @@
         <h3>Editar «{cat.name}»</h3>
         <CategoryForm initial={cat} onSave={(d) => update(cat.id, d)} onCancel={() => (editing = null)} />
       {:else}
+        {#if cat.kind === 'tournament'}
+          <header>
+            <div class="t">
+              <h3 class="ellipsis">{cat.name}</h3>
+              <span class="muted small">{cat.matches} partidos · {cat.active ? 'visible' : 'oculto'}</span>
+            </div>
+            <span class="status tour">Torneo</span>
+          </header>
+          <div class="actions">
+            <button class="btn small primary" onclick={() => (matchesFor = cat)}><Icon name="calendar" size={16} /> Partidos</button>
+            <button class="btn small" onclick={() => (editing = cat.id)} aria-label="Editar"><Icon name="edit" size={16} /></button>
+            <button class="btn small danger" onclick={() => remove(cat.id)} aria-label="Eliminar">
+              <Icon name="trash" size={16} />
+              {#if confirmDelete === cat.id}¿Seguro?{/if}
+            </button>
+          </div>
+        {:else}
         <header>
           <div class="t">
             <h3 class="ellipsis">{cat.name}</h3>
@@ -185,6 +207,7 @@
             {#if confirmDelete === cat.id}¿Seguro?{/if}
           </button>
         </div>
+        {/if}
       {/if}
     </article>
   {/each}
@@ -198,6 +221,7 @@
     <li>En iPhone u ordenador: vuelve aquí y pulsa <b>Subir Excel</b> (puedes elegir los dos a la vez).</li>
   </ol>
 </div>
+{/if}
 
 <style>
   .toolbar {
@@ -251,6 +275,15 @@
   .status.warn {
     background: rgba(242, 165, 22, 0.15);
     color: #b07400;
+  }
+  .status.tour {
+    background: rgba(49, 120, 198, 0.14);
+    color: #2563b0;
+  }
+  @media (prefers-color-scheme: dark) {
+    .status.tour {
+      color: #7fb2ef;
+    }
   }
   .status.err {
     background: rgba(229, 72, 77, 0.12);

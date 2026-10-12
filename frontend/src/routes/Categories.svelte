@@ -28,7 +28,7 @@
           {/if}
         </div>
         <div class="info">
-          <h2 class="ellipsis">{cat.name}</h2>
+          <h2 class="ellipsis">{cat.name}{#if cat.kind === 'tournament'} <span class="tour">· Torneo</span>{/if}</h2>
           <span class="muted ellipsis">
             {#if cat.next_match}
               Próximo: {formatWhen(cat.next_match.starts_at)}
@@ -106,6 +106,16 @@
   h2 {
     font-size: 17px;
     font-weight: 750;
+  }
+  .tour {
+    font-size: 13px;
+    font-weight: 700;
+    color: #2563b0;
+  }
+  @media (prefers-color-scheme: dark) {
+    .tour {
+      color: #7fb2ef;
+    }
   }
   .info span {
     font-size: 13.5px;

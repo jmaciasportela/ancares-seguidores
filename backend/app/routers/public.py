@@ -11,11 +11,14 @@ from ..models import Category, Match
 from ..serializers import Ctx, category_detail, category_summary, iso
 from ..services.logos import logo_map
 from ..services.provisional import provisional_map
-from ..services import stats
+from ..auth import RateLimiter
+from ..schemas import PingIn
+from ..services import stats, usage
 from ..services.importer import is_ours
 from ..services.weather import forecast_for
 
 router = APIRouter(prefix="/api", tags=["public"])
+ping_limiter = RateLimiter(limit=120, window=3600)
 
 
 def cached_json(request: Request, payload) -> Response:
@@ -111,3 +114,11 @@ def weather(match_id: int, session: Session = Depends(get_session)):
         media_type="application/json",
         headers={"Cache-Control": "public, max-age=1800"},
     )
+
+
+@router.post("/ping", status_code=204)
+def ping(data: PingIn, request: Request, session: Session = Depends(get_session)):
+    """Aviso anónimo de uso (ver services/usage.py). No guarda IPs ni datos personales."""
+    ping_limiter.check(request)
+    usage.record_ping(session, data.device, data.installed, data.platform, data.version)
+    return Response(status_code=204)

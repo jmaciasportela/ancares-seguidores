@@ -122,6 +122,29 @@ El Excel solo trae la clasificación actual, así que la evolución se reconstru
 
 En **Clasificación**, si hay resultados provisionales, el interruptor «Incluir resultados provisionales» muestra una tabla orientativa con flechas en los equipos que suben o bajan. A igualdad de puntos se respeta el orden oficial.
 
+## Torneos
+
+Además de las ligas de la FVCL, el admin puede dar de alta **torneos** con *Nueva liga o torneo → Torneo*. No llevan enlaces de la federación: los partidos se meten a mano desde el botón **Partidos** de la tarjeta del torneo.
+- **Uno a uno:** fase, fecha, hora, local, visitante, pabellón y, opcionalmente, el resultado.
+- **Pegando una lista:** un partido por línea, por ejemplo `19/12 10:00 · Grupo A · Ancares UVa - CV Laguna · Pabellón Pisuerga`. Los campos se separan con `·`, `|` o `;` y los equipos con ` - ` o ` vs `. Antes de guardar se muestra una vista previa con los errores de cada línea; si se pone fecha, la hora es obligatoria.
+
+**Resultados:** los de los anotadores (desde el Marcador) son **provisionales** hasta que el admin los **confirma**, desde el editor de partidos o desde *Anotadores*. El admin también puede escribir el resultado directamente: `3-1` o `25-20 23-25 15-12`.
+
+**Clasificación:** se calcula sola por cada fase (Grupo A, Grupo B…) con la puntuación 3/2/1/0. Las eliminatorias (semifinal, final, 3er puesto…) solo se ven como partidos. Los torneos aparecen en la portada, el calendario y el marcador como cualquier categoría, con la etiqueta «Torneo».
+
+## Uso de la app (anónimo)
+
+La pestaña **Uso** del admin muestra:
+- dispositivos activos hoy, en 7 días y en 30 días;
+- **instalaciones activas** (la app abierta como app instalada) y altas nuevas;
+- dispositivos por día;
+- frecuencia (días de uso en el último mes);
+- plataformas y versiones.
+
+**Cómo se recoge:** cada móvil genera un identificador aleatorio que solo se guarda en él y, al abrir la app, como mucho cada 30 minutos, envía un aviso a `/api/ping`. El aviso lleva ese identificador, si la app está instalada, la plataforma y la versión. En el servidor se guarda solo el hash del identificador.
+
+**Privacidad:** no se guardan IPs ni datos personales, y lo que tiene más de 180 días se borra en la sincronización programada. En iPhone, la app instalada y Safari cuentan como dos dispositivos.
+
 ## Marcador y resultados provisionales
 
 La pestaña **Marcador** permite llevar el tanteo de un partido con un toque por punto. Sigue la normativa FIVB/RFEVB:
@@ -135,6 +158,7 @@ El partido en curso se guarda en el móvil, así que no se pierde si se cierra l
 - **Cualquiera:** puede usar el marcador y compartir el resultado por WhatsApp.
 - **Anotadores:** publican el resultado en la app como **provisional**. El admin les crea un código en la pestaña *Anotadores* (se muestra una sola vez) y ellos lo introducen en la app, en *Club → Funciones extra*. Revocar un anotador lo desactiva al momento en todos sus móviles. El admin también puede publicar.
 - **Qué se publica:** el resultado aparece con la etiqueta «Provisional · pendiente de confirmar por la federación», no cuenta para la clasificación y desaparece en cuanto la FVCL publica el oficial. Desde el admin se pueden ver y borrar.
+- **Manda el primero:** si dos anotadores publican el mismo partido, se queda el primero. Solo quien lo publicó puede corregirlo, y el admin siempre puede sustituirlo o borrarlo. Si alguien lo intenta, el marcador le dice quién lo publicó.
 
 ## Particularidades de los Excel de la FVCL (Clupik)
 

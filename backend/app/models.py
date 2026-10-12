@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -26,6 +26,12 @@ class Category(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Formato de puntuación para el marcador (ver scoring_format.py); None = por defecto
     score_format: Mapped[Optional[dict]] = mapped_column(JSON)
+    # "league": liga de la FVCL (Excel); "tournament": torneo que da de alta el admin a mano
+    kind: Mapped[str] = mapped_column(String(20), default="league")
+
+    @property
+    def is_tournament(self) -> bool:
+        return self.kind == "tournament"
 
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     data_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -163,3 +169,33 @@ class ProvisionalResult(Base):
     published_by: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Device(Base):
+    """Dispositivo anónimo que usa la app (solo el hash de un id aleatorio del móvil)."""
+
+    __tablename__ = "devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    installed: Mapped[bool] = mapped_column(Boolean, default=False)
+    platform: Mapped[str] = mapped_column(String(20), default="otro")
+    version: Mapped[Optional[str]] = mapped_column(String(20))
+    visits: Mapped[int] = mapped_column(Integer, default=1)
+
+    days: Mapped[List["DeviceDay"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+
+
+class DeviceDay(Base):
+    """Días en que se usó cada dispositivo (para activos diarios y frecuencia)."""
+
+    __tablename__ = "device_days"
+    __table_args__ = (UniqueConstraint("device_id", "day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[int] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+
+    device: Mapped[Device] = relationship(back_populates="days")

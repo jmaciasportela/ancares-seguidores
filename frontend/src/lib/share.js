@@ -11,7 +11,7 @@ export function matchText(category, m) {
       `🏐 ${category} · ${m.round_name}`,
       `${m.home} ${score.home} - ${score.away} ${m.away}`,
       partials ? `(${partials})` : '',
-      score.provisional ? '⏳ Resultado provisional, pendiente de la federación' : '',
+      score.provisional ? `⏳ Resultado provisional, pendiente de ${m.tournament ? 'confirmar' : 'la federación'}` : '',
       '',
       '¡Vamos Ancares! 💚🖤',
     ]

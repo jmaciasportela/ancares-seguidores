@@ -14,6 +14,7 @@ from ..models import Category, SyncLog, utcnow
 from .fetcher import fetch_xls, make_client
 from .importer import import_file
 from .logos_fvcl import search_category_logos
+from . import usage
 from .mailer import send_admin_email
 
 log = logging.getLogger(__name__)
@@ -68,6 +69,10 @@ def sync_categories(category_ids: Optional[List[int]] = None, source: str = "aut
 def daily_job() -> None:
     global _last_blocked_email
     log.info("Sincronización programada iniciada")
+    with SessionLocal() as session:
+        gone = usage.purge_old(session)  # privacidad: fuera los datos de uso de más de 180 días
+        if gone:
+            log.info("Uso: %s dispositivos inactivos borrados", gone)
     report = sync_categories(source="auto", pause=True)
     failed = [r for r in report if r["status"] in ("blocked", "error")]
     if failed and _last_blocked_email != date.today():

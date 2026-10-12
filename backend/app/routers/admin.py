@@ -1,4 +1,5 @@
 import re
+from datetime import timezone
 from pathlib import PurePath
 from typing import List, Optional
 
@@ -17,9 +18,9 @@ from ..auth import (
     set_session,
 )
 from ..db import get_session
-from ..models import Category, Feedback, ProvisionalResult, Scorer, Standing, SyncLog, Team, utcnow
+from ..models import Category, Feedback, Match, ProvisionalResult, Scorer, Standing, SyncLog, Team, utcnow
 from ..parsers.common import ParseError, norm
-from ..schemas import CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, ScorerIn, SyncIn
+from ..schemas import BulkIn, CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, MatchIn, ParseIn, ScorerIn, SyncIn
 from ..serializers import category_admin, iso, provisional_out
 from ..services.fetcher import make_client
 from ..services.importer import import_file, is_ours, sniff_kind
@@ -33,6 +34,8 @@ from ..services.logos import (
     sync_teams_from_standings,
 )
 from ..services.logos_fvcl import search_category_logos
+from ..services import tournament, usage
+from ..services.provisional import match_key, provisional_map
 from ..services.mailer import email_status, send_test_email
 from ..services.sync import sync_categories
 
@@ -175,6 +178,10 @@ async def upload(
         if not cat:
             results.append({"filename": filename, "kind": kind, "status": "needs_category",
                             "message": "No sé a qué categoría pertenece; elígela"})
+            continue
+        if cat.is_tournament:
+            results.append({"filename": filename, "kind": kind, "status": "error", "category": cat.name,
+                            "message": "Es un torneo: sus partidos se meten a mano, no con el Excel de la FVCL"})
             continue
         res = import_file(session, cat, data, source=source, force=True)
         results.append({"filename": filename, "kind": kind, "status": res.status, "message": res.message,
@@ -387,13 +394,28 @@ def delete_scorer(scorer_id: int, session: Session = Depends(get_session)):
 
 @protected.get("/provisional")
 def list_provisional(session: Session = Depends(get_session)):
-    names = {c.id: c.name for c in session.scalars(select(Category)).all()}
+    cats = {c.id: c for c in session.scalars(select(Category)).all()}
     rows = session.scalars(select(ProvisionalResult).order_by(ProvisionalResult.updated_at.desc())).all()
     return [
-        {"id": p.id, "category": names.get(p.category_id), "round_no": p.round_no, "home": p.home, "away": p.away,
-         **provisional_out(p)}
+        {"id": p.id, "category": cats[p.category_id].name if p.category_id in cats else None,
+         "tournament": bool(p.category_id in cats and cats[p.category_id].is_tournament),
+         "round_no": p.round_no, "home": p.home, "away": p.away, **provisional_out(p)}
         for p in rows
     ]
+
+
+@protected.post("/provisional/{provisional_id}/confirm")
+def confirm_provisional(provisional_id: int, session: Session = Depends(get_session)):
+    """Torneos: el admin da por bueno el resultado provisional."""
+    prov = session.get(ProvisionalResult, provisional_id)
+    if not prov:
+        raise HTTPException(status_code=404, detail="Resultado no encontrado")
+    try:
+        match = tournament.confirm_provisional(session, prov)
+    except tournament.TournamentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    session.commit()
+    return {"ok": True, "match_id": match.id}
 
 
 @protected.delete("/provisional/{provisional_id}")
@@ -416,3 +438,103 @@ def email_info():
 def email_test():
     ok, error = send_test_email()
     return {"ok": ok, "error": error, **email_status()}
+
+
+# --- uso de la app ------------------------------------------------------------
+
+@protected.get("/usage")
+def usage_summary(session: Session = Depends(get_session)):
+    return usage.summary(session)
+
+
+# --- torneos: partidos a mano -----------------------------------------------------
+
+def _tournament(session: Session, category_id: int) -> Category:
+    cat = _get_category(session, category_id)
+    if not cat.is_tournament:
+        raise HTTPException(status_code=422, detail="Los partidos de liga vienen del Excel de la federación")
+    return cat
+
+
+def _admin_match(m: Match, prov: Optional[ProvisionalResult]) -> dict:
+    local = m.starts_at.replace(tzinfo=m.starts_at.tzinfo or timezone.utc).astimezone(tournament.TZ) if m.starts_at else None
+    return {
+        "id": m.id, "phase": m.round_name, "round_no": m.round_no, "home": m.home, "away": m.away,
+        "date": local.date().isoformat() if local else None, "time": local.strftime("%H:%M") if local else None,
+        "venue": m.venue, "home_sets": m.home_sets, "away_sets": m.away_sets, "partials": m.partials or [],
+        "result": m.raw_result or (f"{m.home_sets}-{m.away_sets}" if m.home_sets is not None else None),
+        "is_ours": m.is_ours, "provisional": {"id": prov.id, **provisional_out(prov)} if prov else None,
+    }
+
+
+def _matches_out(session: Session, cat: Category) -> list:
+    provs = provisional_map(session)
+    session.refresh(cat)
+    return [_admin_match(m, provs.get(match_key(m))) for m in sorted(cat.matches, key=lambda m: m.order)]
+
+
+def _save(session: Session, cat: Category, data: dict, match: Optional[Match] = None) -> Match:
+    try:
+        m = tournament.save_match(session, cat, data, match)
+    except (tournament.TournamentError, ValueError) as exc:
+        session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    cat.data_updated_at = utcnow()
+    return m
+
+
+@protected.get("/categories/{category_id}/matches")
+def list_tournament_matches(category_id: int, session: Session = Depends(get_session)):
+    return _matches_out(session, _tournament(session, category_id))
+
+
+@protected.post("/categories/{category_id}/matches", status_code=201)
+def create_tournament_match(category_id: int, data: MatchIn, session: Session = Depends(get_session)):
+    cat = _tournament(session, category_id)
+    m = _save(session, cat, data.model_dump())
+    session.commit()
+    return {"id": m.id}
+
+
+@protected.put("/matches/{match_id}")
+def update_tournament_match(match_id: int, data: MatchIn, session: Session = Depends(get_session)):
+    m = session.get(Match, match_id)
+    if not m:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+    cat = _tournament(session, m.category_id)
+    _save(session, cat, data.model_dump(), m)
+    session.commit()
+    return {"id": m.id}
+
+
+@protected.delete("/matches/{match_id}")
+def delete_tournament_match(match_id: int, session: Session = Depends(get_session)):
+    m = session.get(Match, match_id)
+    if not m:
+        return {"ok": True}
+    cat = _tournament(session, m.category_id)
+    prov = provisional_map(session).get(match_key(m))
+    if prov:
+        session.delete(prov)
+    session.delete(m)
+    session.flush()
+    tournament.renumber(session, cat)
+    cat.data_updated_at = utcnow()
+    session.commit()
+    return {"ok": True}
+
+
+@protected.post("/categories/{category_id}/matches/parse")
+def parse_tournament_matches(category_id: int, data: ParseIn, session: Session = Depends(get_session)):
+    """Vista previa de una lista pegada (no guarda nada)."""
+    _tournament(session, category_id)
+    return {"rows": [r.as_dict() for r in tournament.parse_lines(data.text)]}
+
+
+@protected.post("/categories/{category_id}/matches/bulk", status_code=201)
+def bulk_tournament_matches(category_id: int, data: BulkIn, session: Session = Depends(get_session)):
+    cat = _tournament(session, category_id)
+    for item in data.matches:
+        _save(session, cat, item.model_dump())
+    session.commit()
+    return {"created": len(data.matches)}

@@ -50,7 +50,7 @@
         {/if}
         {#if score.partials.length}<span class="partials">{partialsText(score)}</span>{/if}
         {#if score.provisional}
-          <span class="prov-note">Pendiente de confirmar por la federación{score.early ? ' · terminado antes de tiempo' : ''}</span>
+          <span class="prov-note">Pendiente de confirmar por {match.tournament ? 'la organización' : 'la federación'}{score.early ? ' · terminado antes de tiempo' : ''}</span>
         {/if}
       {:else}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>

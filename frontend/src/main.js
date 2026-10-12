@@ -2,9 +2,11 @@ import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
 import { toast } from './lib/toast.js';
+import { startUsagePings } from './lib/usage.js';
 
 const VERSION = __APP_VERSION__;
 const app = mount(App, { target: document.getElementById('app') });
+if (import.meta.env.PROD) startUsagePings();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const startedAt = performance.now();

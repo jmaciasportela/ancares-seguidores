@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..auth import RateLimiter, clear_scorer_session, hash_code, is_admin, scorer_id_from, set_scorer_session
@@ -78,10 +79,19 @@ def logout(response: Response):
 
 # --- partidos para anotar -----------------------------------------------------
 
+def taken_by_other(prov: Optional[ProvisionalResult], who: Publisher) -> bool:
+    """El primer resultado publicado manda: solo su autor o el admin pueden cambiarlo."""
+    if prov is None or who.scorer is None:  # sin resultado previo, o admin
+        return False
+    return prov.scorer_id != who.scorer.id
+
+
 @router.get("/scoring/matches")
-def scoring_matches(session: Session = Depends(get_session)):
+def scoring_matches(request: Request, session: Session = Depends(get_session)):
     """Partidos de Ancares sin resultado oficial en ±2 días, del más cercano a ahora al más lejano."""
     now = datetime.now(timezone.utc)
+    me = current_scorer(request, session)
+    who = Publisher(None, "Admin") if is_admin(request) else Publisher(me, me.name if me else "")
     cats = session.scalars(
         select(Category).where(Category.active.is_(True)).options(selectinload(Category.matches))
     ).all()
@@ -95,11 +105,14 @@ def scoring_matches(session: Session = Depends(get_session)):
             if abs(delta) > WINDOW:
                 continue
             item = match_out(m, ctx)
+            prov = ctx.provisional_for(m)
             item.update(
                 category=cat.name,
                 category_slug=cat.slug,
                 score_format=format_of(cat.score_format),
                 minutes_from_now=round(delta.total_seconds() / 60),
+                # ¿Puede quien pregunta publicar (o corregir) este partido?
+                can_publish=(who.scorer is not None or is_admin(request)) and not taken_by_other(prov, who),
             )
             items.append(item)
     items.sort(key=lambda i: abs(i["minutes_from_now"]))
@@ -136,6 +149,12 @@ def publish(data: ProvisionalIn, who: Publisher = Depends(require_publisher), se
             ProvisionalResult.away_key == key[3],
         )
     ).first()
+    if taken_by_other(prov, who):
+        raise HTTPException(
+            status_code=409,
+            detail=(f"Ya hay un resultado provisional ({prov.home_sets}-{prov.away_sets}) publicado por "
+                    f"{prov.published_by}. Si no es correcto, pide al admin que lo borre."),
+        )
     if not prov:
         prov = ProvisionalResult(
             category_id=cat.id, round_no=match.round_no, home=match.home, away=match.away,
@@ -150,5 +169,10 @@ def publish(data: ProvisionalIn, who: Publisher = Depends(require_publisher), se
     prov.updated_at = utcnow()
     if who.scorer:
         who.scorer.last_used_at = utcnow()
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        # Dos anotadores publicando a la vez: la base de datos solo admite uno por partido
+        session.rollback()
+        raise HTTPException(status_code=409, detail="Otra persona acaba de publicar este resultado. Recarga para verlo.") from exc
     return {"ok": True, "provisional": provisional_out(prov), "category_slug": cat.slug}

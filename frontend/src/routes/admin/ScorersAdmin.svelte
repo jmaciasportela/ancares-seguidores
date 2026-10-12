@@ -60,6 +60,16 @@
     await load();
   }
 
+  async function confirmProvisional(p) {
+    try {
+      await api(`/api/admin/provisional/${p.id}/confirm`, { method: 'POST' });
+      toast('Resultado del torneo confirmado', 'ok');
+      await load();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
   async function removeProvisional(p) {
     await api(`/api/admin/provisional/${p.id}`, { method: 'DELETE' });
     toast('Resultado provisional borrado', 'ok');
@@ -147,6 +157,9 @@
         <span class="muted small">Por {p.by} · {timeAgo(p.updated_at)}{p.finished_early ? ' · terminado antes de tiempo' : ''}</span>
       </div>
       <div class="row">
+        {#if p.tournament}
+          <button class="btn small primary" onclick={() => confirmProvisional(p)}><Icon name="check" size={15} /> Confirmar</button>
+        {/if}
         <button class="btn small danger" onclick={() => removeProvisional(p)}><Icon name="trash" size={15} /> Borrar</button>
       </div>
     </article>

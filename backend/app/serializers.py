@@ -93,6 +93,7 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
         "played": m.home_sets is not None,
         "is_ours": m.is_ours,
         "provisional": provisional_out(prov) if prov else None,
+        "tournament": bool(m.category and m.category.is_tournament),
     }
 
 
@@ -147,6 +148,7 @@ def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
         "after_match": match_out(am, ctx) if am else None,
         "last_result": match_out(lr, ctx) if lr else None,
         "score_format": format_of(c.score_format),
+        "kind": c.kind or "league",
         "updated_at": iso(c.data_updated_at),
     }
 
@@ -155,6 +157,10 @@ def category_detail(c: Category, ctx: Ctx = EMPTY) -> dict:
     data = category_summary(c, ctx)
     data["standings"] = [standing_out(s, ctx) for s in c.standings]
     data["matches"] = [match_out(m, ctx) for m in c.matches]
+    if c.is_tournament:
+        from .services.tournament import group_tables
+
+        data["groups"] = group_tables(c, ctx.provisional_for, ctx.logo)
     return data
 
 
@@ -169,6 +175,7 @@ def category_admin(c: Category) -> dict:
         "sort_order": c.sort_order,
         "active": c.active,
         "score_format": format_of(c.score_format),
+        "kind": c.kind or "league",
         "sync_status": c.sync_status,
         "last_error": c.last_error,
         "last_sync_at": iso(c.last_sync_at),

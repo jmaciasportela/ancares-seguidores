@@ -11,6 +11,7 @@
   import SharedUpload from './SharedUpload.svelte';
   import ScorersAdmin from './ScorersAdmin.svelte';
   import TeamsAdmin from './TeamsAdmin.svelte';
+  import UsageAdmin from './UsageAdmin.svelte';
 
   let authed = $state(null); // null = comprobando
   let password = $state('');
@@ -50,6 +51,7 @@
     { id: 'equipos', label: 'Equipos', icon: 'ball' },
     { id: 'anotadores', label: 'Anotadores', icon: 'key' },
     { id: 'feedback', label: 'Feedback', icon: 'inbox' },
+    { id: 'uso', label: 'Uso', icon: 'install' },
     { id: 'registro', label: 'Registro', icon: 'list' },
   ];
 </script>
@@ -96,6 +98,8 @@
           <TeamsAdmin />
         {:else if tab === 'anotadores'}
           <ScorersAdmin />
+        {:else if tab === 'uso'}
+          <UsageAdmin />
         {:else if tab === 'feedback'}
           <FeedbackAdmin />
         {:else}

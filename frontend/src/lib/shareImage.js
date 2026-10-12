@@ -257,7 +257,11 @@ export async function renderMatchImage(data, formatKey = 'story') {
 
   // Banda: provisional o previsión del tiempo
   const band = data.provisional
-    ? { label: 'RESULTADO PROVISIONAL · pendiente de la federación', fill: 'rgba(242,165,22,0.18)', color: '#ffc861' }
+    ? {
+        label: `RESULTADO PROVISIONAL · pendiente de ${data.tournament ? 'confirmar' : 'la federación'}`,
+        fill: 'rgba(242,165,22,0.18)',
+        color: '#ffc861',
+      }
     : data.weather
       ? { label: data.weather, fill: 'rgba(255,255,255,0.1)', color: '#fff' }
       : null;

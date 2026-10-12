@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,6 +17,7 @@ class CategoryIn(BaseModel):
     sort_order: int = 0
     active: bool = True
     score_format: Optional[ScoreFormat] = None
+    kind: Literal["league", "tournament"] = "league"
 
     @field_validator("ranking_url", "calendar_url")
     @classmethod
@@ -76,3 +77,35 @@ class ProvisionalIn(BaseModel):
     away_sets: int = Field(ge=0, le=7)
     partials: List[List[Union[int, bool]]] = Field(max_length=7)
     finished_early: bool = False
+
+
+class PingIn(BaseModel):
+    device: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+    installed: bool = False
+    platform: str = Field(default="otro", max_length=20)
+    version: Optional[str] = Field(default=None, max_length=20)
+
+
+class MatchIn(BaseModel):
+    """Partido de torneo (a mano)."""
+
+    phase: Optional[str] = Field(default=None, max_length=80)
+    date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    time: Optional[str] = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    home: str = Field(min_length=1, max_length=200)
+    away: str = Field(min_length=1, max_length=200)
+    venue: Optional[str] = Field(default=None, max_length=200)
+    result: Optional[str] = Field(default=None, max_length=80)
+
+    @field_validator("date", "time", "phase", "venue", "result", mode="before")
+    @classmethod
+    def _empty(cls, v):
+        return v.strip() or None if isinstance(v, str) else v
+
+
+class ParseIn(BaseModel):
+    text: str = Field(max_length=20000)
+
+
+class BulkIn(BaseModel):
+    matches: List[MatchIn] = Field(max_length=300)

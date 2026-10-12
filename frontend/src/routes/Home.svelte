@@ -47,6 +47,7 @@
     <section class="cat" in:fly={{ y: 24, delay: 80 + i * 90 }}>
       <a class="cat-head" href="#/c/{cat.slug}">
         <h2>{cat.name}</h2>
+        {#if cat.kind === 'tournament'}<span class="chip tour">Torneo</span>{/if}
         {#if cat.our_position}
           <span class="chip brand">{cat.our_position}º · {cat.our_points} pts</span>
         {/if}
@@ -120,6 +121,16 @@
   }
   .cat-head :global(svg) {
     color: var(--muted);
+  }
+  .chip.tour {
+    background: rgba(49, 120, 198, 0.14);
+    color: #2563b0;
+  }
+  @media (prefers-color-scheme: dark) {
+    .chip.tour,
+    .tour {
+      color: #7fb2ef;
+    }
   }
   .last .section-title {
     display: block;

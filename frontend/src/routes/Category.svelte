@@ -19,9 +19,13 @@
 
   const res = $derived(resource(`/api/categories/${slug}`));
   const data = $derived($res.data);
+  const isTournament = $derived(data?.kind === 'tournament');
+  // Los torneos no tienen evolución de temporada: sin pestaña de estadísticas
+  const tabs = $derived(isTournament ? TABS.filter((t) => t.id !== 'estadisticas') : TABS);
+  const groupsHaveProvisional = $derived(!!data?.groups?.some((g) => g.with_provisional));
 
   // Clasificación provisional: solo se pide si hay resultados provisionales
-  const hasProvisional = $derived(!!data?.matches?.some((m) => m.provisional));
+  const hasProvisional = $derived(!isTournament && !!data?.matches?.some((m) => m.provisional));
   const statsRes = $derived(hasProvisional ? resource(`/api/categories/${slug}/stats`) : null);
   const provisionalTable = $derived(statsRes ? $statsRes?.data?.provisional_table : null);
   let withProvisional = $state(false);
@@ -36,22 +40,27 @@
       el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
   }
+  let tabBar;
   $effect(() => {
     tabIndex;
-    tabEls.length;
+    tabs.length;
     measure();
   });
+  // Vuelve a medir si cambia el tamaño de las pestañas (giro del móvil, torneo con 3 pestañas...)
   $effect(() => {
-    addEventListener('resize', measure);
-    return () => removeEventListener('resize', measure);
+    if (!tabBar) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(tabBar);
+    tabEls.forEach((el) => el && ro.observe(el));
+    return () => ro.disconnect();
   });
-  const tab = $derived(TABS.some((t) => t.id === $route.query.get('t')) ? $route.query.get('t') : 'clasificacion');
-  const tabIndex = $derived(TABS.findIndex((t) => t.id === tab));
+  const tab = $derived(tabs.some((t) => t.id === $route.query.get('t')) ? $route.query.get('t') : 'clasificacion');
+  const tabIndex = $derived(tabs.findIndex((t) => t.id === tab));
   let direction = $state(1);
   let onlyOurs = $state(true);
 
   function setTab(id) {
-    const next = TABS.findIndex((t) => t.id === id);
+    const next = tabs.findIndex((t) => t.id === id);
     direction = next > tabIndex ? 1 : -1;
     go(`/c/${slug}?t=${id}`, { replace: true });
   }
@@ -72,7 +81,7 @@
       touch = null;
       if (fast && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
         const next = tabIndex + (dx < 0 ? 1 : -1);
-        if (next >= 0 && next < TABS.length) setTab(TABS[next].id);
+        if (next >= 0 && next < tabs.length) setTab(tabs[next].id);
       }
     };
     node.addEventListener('touchstart', start, { passive: true });
@@ -132,9 +141,9 @@
       <span class="pos">{data.our_position}º</span>
     {/if}
   </div>
-  <div class="tabs" role="tablist">
+  <div class="tabs" role="tablist" bind:this={tabBar}>
     <span class="ind" style="transform:translateX({ind.left}px);width:{ind.width}px"></span>
-    {#each TABS as t, i}
+    {#each tabs as t, i}
       <button bind:this={tabEls[i]} role="tab" aria-selected={tab === t.id} class:active={tab === t.id} onclick={() => setTab(t.id)}>{t.label}</button>
     {/each}
   </div>
@@ -151,7 +160,27 @@
   {:else if data}
     {#key tab}
       <div class="pane" in:fly={{ x: 40 * direction, y: 0, duration: 320 }}>
-        {#if tab === 'clasificacion'}
+        {#if tab === 'clasificacion' && isTournament}
+          {#if data.groups?.length}
+            {#if groupsHaveProvisional}
+              <label class="toggle">
+                <input type="checkbox" bind:checked={withProvisional} />
+                <span class="sw"></span>
+                Incluir resultados provisionales
+              </label>
+              {#if withProvisional}
+                <p class="prov-note">⏳ Clasificación orientativa con resultados aún sin confirmar.</p>
+              {/if}
+            {/if}
+            {#each data.groups as g (g.name)}
+              {#if data.groups.length > 1 || g.name !== 'Partidos'}<h2 class="group">{g.name}</h2>{/if}
+              <StandingsTable standings={withProvisional && g.with_provisional ? g.with_provisional : g.standings} />
+            {/each}
+            <p class="legend muted">Puntos: 3 por ganar, 2 por ganar en el set decisivo, 1 por perderlo · Las eliminatorias están en Calendario</p>
+          {:else}
+            <div class="card empty">Este torneo no tiene fase de grupos: mira el Calendario.</div>
+          {/if}
+        {:else if tab === 'clasificacion'}
           {#if data.standings.length}
             {#if provisionalTable}
               <label class="toggle">
@@ -310,13 +339,29 @@
     min-height: 70vh;
     overflow-x: hidden;
   }
+  .group {
+    font-size: 15px;
+    font-weight: 800;
+    margin: 18px 2px 8px;
+  }
+  .group:first-of-type {
+    margin-top: 0;
+  }
   .prov-note {
     margin: -6px 2px 12px;
     font-size: 12.5px;
     color: #a86a00;
   }
   @media (prefers-color-scheme: dark) {
-    .prov-note {
+    .group {
+    font-size: 15px;
+    font-weight: 800;
+    margin: 18px 2px 8px;
+  }
+  .group:first-of-type {
+    margin-top: 0;
+  }
+  .prov-note {
       color: #f5b94a;
     }
   }

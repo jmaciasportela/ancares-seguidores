@@ -171,3 +171,41 @@ def test_migration_adds_score_format_column():
     with engine.begin() as conn:
         cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(categories)")}
     assert "score_format" in cols
+
+
+def test_first_result_wins(client, league):
+    cat, match = league
+    ana, luis = make_scorer(client, "Ana"), make_scorer(client, "Luis")
+
+    def as_scorer(code):
+        client.cookies.clear()
+        assert client.post("/api/scorer/join", json={"code": code}).status_code == 200
+
+    # Ana publica primero
+    as_scorer(ana["code"])
+    assert client.post("/api/scoring/results", json=result(match)).status_code == 200
+
+    # Luis no puede pisarla, y el marcador ya no le ofrece publicar ese partido
+    as_scorer(luis["code"])
+    item = next(i for i in client.get("/api/scoring/matches").json() if i["away"] == "VCV Castilla")
+    assert item["provisional"]["by"] == "Ana" and item["can_publish"] is False
+    r = client.post("/api/scoring/results", json=result(match, home_sets=0, away_sets=2, partials=[[10, 25], [10, 25]]))
+    assert r.status_code == 409 and "publicado por Ana" in r.json()["detail"]
+
+    # Ana sí puede corregir su propio resultado
+    as_scorer(ana["code"])
+    assert next(i for i in client.get("/api/scoring/matches").json() if i["away"] == "VCV Castilla")["can_publish"]
+    fixed = result(match, home_sets=2, away_sets=0, partials=[[25, 20], [25, 18]])
+    assert client.post("/api/scoring/results", json=fixed).status_code == 200
+
+    # El admin siempre puede sustituirlo
+    client.cookies.clear()
+    client.post("/api/admin/login", json={"password": "secreto"})
+    r = client.post("/api/scoring/results", json=result(match))
+    assert r.status_code == 200 and r.json()["provisional"]["by"] == "Admin"
+    provisional = client.get("/api/admin/provisional").json()
+    assert len(provisional) == 1 and provisional[0]["home_sets"] == 2 and provisional[0]["away_sets"] == 1
+
+    # Sin código no se puede publicar nada
+    client.cookies.clear()
+    assert next(i for i in client.get("/api/scoring/matches").json() if i["away"] == "VCV Castilla")["can_publish"] is False
