@@ -9,14 +9,44 @@
     { id: 'marcador', href: '#/marcador', icon: 'score', label: 'Marcador' },
     { id: 'club', href: '#/club', icon: 'club', label: 'Club' },
   ];
-  const index = $derived(Math.max(0, items.findIndex((i) => i.id === active)));
+  const index = $derived(items.findIndex((i) => i.id === active));
+
+  // Cada pestaña ocupa según su texto («Club» necesita menos que «Competiciones»),
+  // así que el marco verde se mide sobre la pestaña activa.
+  let inner;
+  let links = $state([]);
+  let ind = $state({ left: 0, width: 0 });
+  function measure() {
+    const el = links[index];
+    if (el) ind = { left: el.offsetLeft, width: el.offsetWidth };
+  }
+  $effect(() => {
+    index;
+    measure();
+  });
+  $effect(() => {
+    if (!inner) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(inner);
+    links.forEach((el) => el && ro.observe(el));
+    return () => ro.disconnect();
+  });
 </script>
 
 <nav class="nav" aria-label="Navegación principal">
-  <div class="inner" style="--i:{index}; --n:{items.length}">
-    <span class="indicator" class:hidden={!items.some((i) => i.id === active)}></span>
-    {#each items as item}
-      <a href={item.href} class:active={item.id === active} aria-current={item.id === active ? 'page' : undefined}>
+  <div class="inner" bind:this={inner}>
+    <span
+      class="indicator"
+      class:hidden={index < 0 || !ind.width}
+      style="transform:translateX({ind.left}px);width:{ind.width}px"
+    ></span>
+    {#each items as item, i}
+      <a
+        bind:this={links[i]}
+        href={item.href}
+        class:active={item.id === active}
+        aria-current={item.id === active ? 'page' : undefined}
+      >
         <Icon name={item.icon} size={23} stroke={item.id === active ? 2.3 : 1.9} />
         <span>{item.label}</span>
       </a>
@@ -40,8 +70,8 @@
     max-width: 460px;
     margin: 0 auto;
     height: var(--nav-h);
-    display: grid;
-    grid-template-columns: repeat(var(--n), 1fr);
+    display: flex;
+    padding: 6px;
     border-radius: 22px;
     background: color-mix(in srgb, var(--surface) 82%, transparent);
     backdrop-filter: saturate(1.6) blur(18px);
@@ -53,18 +83,20 @@
     position: absolute;
     top: 6px;
     bottom: 6px;
-    left: 6px;
-    width: calc((100% - 12px) / var(--n));
+    left: 0;
     border-radius: 16px;
     background: var(--brand-soft);
-    transform: translateX(calc(var(--i) * 100%));
-    transition: transform 0.45s var(--spring), opacity 0.2s;
+    transition: transform 0.45s var(--spring), width 0.45s var(--spring), opacity 0.2s;
   }
   .indicator.hidden {
     opacity: 0;
   }
   a {
     position: relative;
+    /* El ancho base es el del texto; el sobrante se reparte a partes iguales */
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 8px;
     display: grid;
     place-items: center;
     align-content: center;
@@ -73,6 +105,7 @@
     text-decoration: none;
     font-size: 11.5px;
     font-weight: 650;
+    white-space: nowrap;
     transition: color 0.2s;
   }
   a.active {
@@ -88,5 +121,12 @@
   }
   a.active :global(svg) {
     transform: translateY(-1px) scale(1.08);
+  }
+  /* Móviles muy estrechos: un poco menos de letra y de margen */
+  @media (max-width: 350px) {
+    a {
+      padding: 0 5px;
+      font-size: 10.5px;
+    }
   }
 </style>
