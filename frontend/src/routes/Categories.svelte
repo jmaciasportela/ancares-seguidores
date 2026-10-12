@@ -6,10 +6,38 @@
 
   const home = resource('/api/home');
   const cats = $derived($home.data?.categories || []);
+  // La liga es lo principal: siempre arriba; los torneos, en su propio bloque
+  const leagues = $derived(cats.filter((c) => c.kind !== 'tournament'));
+  const tournaments = $derived(cats.filter((c) => c.kind === 'tournament'));
 </script>
 
+{#snippet item(cat, i)}
+  <a class="item card" href="#/c/{cat.slug}" in:fly={{ y: 20, delay: i * 60 }}>
+    <div class="pos" class:none={!cat.our_position} class:tour={cat.kind === 'tournament'}>
+      {#if cat.our_position}
+        <b>{cat.our_position}º</b><span>de {cat.teams}</span>
+      {:else}
+        <Icon name={cat.kind === 'tournament' ? 'trophy' : 'ball'} size={22} />
+      {/if}
+    </div>
+    <div class="info">
+      <h2 class="ellipsis">{cat.name}</h2>
+      <span class="muted ellipsis">
+        {#if cat.next_match}
+          Próximo: {formatWhen(cat.next_match.starts_at)}
+        {:else if cat.our_points !== null}
+          {cat.our_points} puntos
+        {:else}
+          Sin datos todavía
+        {/if}
+      </span>
+    </div>
+    <Icon name="chevron" size={20} />
+  </a>
+{/snippet}
+
 <div class="page">
-  <h1 class="title" in:fly={{ y: -10 }}>Categorías</h1>
+  <h1 class="title" in:fly={{ y: -10 }}>Competiciones</h1>
 
   {#if !$home.data && $home.loading}
     {#each [1, 2, 3] as _}
@@ -17,32 +45,19 @@
     {/each}
   {/if}
 
-  <div class="list">
-    {#each cats as cat, i (cat.id)}
-      <a class="item card" href="#/c/{cat.slug}" in:fly={{ y: 20, delay: i * 60 }}>
-        <div class="pos" class:none={!cat.our_position}>
-          {#if cat.our_position}
-            <b>{cat.our_position}º</b><span>de {cat.teams}</span>
-          {:else}
-            <Icon name="ball" size={22} />
-          {/if}
-        </div>
-        <div class="info">
-          <h2 class="ellipsis">{cat.name}{#if cat.kind === 'tournament'} <span class="tour">· Torneo</span>{/if}</h2>
-          <span class="muted ellipsis">
-            {#if cat.next_match}
-              Próximo: {formatWhen(cat.next_match.starts_at)}
-            {:else if cat.our_points !== null}
-              {cat.our_points} puntos
-            {:else}
-              Sin datos todavía
-            {/if}
-          </span>
-        </div>
-        <Icon name="chevron" size={20} />
-      </a>
-    {/each}
-  </div>
+  {#if leagues.length}
+    {#if tournaments.length}<h2 class="section-title">Ligas</h2>{/if}
+    <div class="list">
+      {#each leagues as cat, i (cat.id)}{@render item(cat, i)}{/each}
+    </div>
+  {/if}
+
+  {#if tournaments.length}
+    <h2 class="section-title">Torneos</h2>
+    <div class="list">
+      {#each tournaments as cat, i (cat.id)}{@render item(cat, leagues.length + i)}{/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -50,7 +65,10 @@
     font-size: 28px;
     font-weight: 850;
     padding-top: calc(var(--safe-top) + 8px);
-    margin-bottom: 18px;
+    margin-bottom: 6px;
+  }
+  .section-title:first-of-type {
+    margin-top: 12px;
   }
   .list {
     display: grid;
@@ -107,13 +125,12 @@
     font-size: 17px;
     font-weight: 750;
   }
-  .tour {
-    font-size: 13px;
-    font-weight: 700;
+  .pos.tour {
+    background: rgba(49, 120, 198, 0.14);
     color: #2563b0;
   }
   @media (prefers-color-scheme: dark) {
-    .tour {
+    .pos.tour {
       color: #7fb2ef;
     }
   }

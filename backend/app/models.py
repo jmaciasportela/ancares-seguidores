@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, case
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -199,3 +199,8 @@ class DeviceDay(Base):
     day: Mapped[date] = mapped_column(Date, index=True)
 
     device: Mapped[Device] = relationship(back_populates="days")
+
+
+def competition_order():
+    """Ligas siempre antes que torneos; dentro de cada grupo, el orden del admin."""
+    return (case((Category.kind == "tournament", 1), else_=0), Category.sort_order, Category.name)

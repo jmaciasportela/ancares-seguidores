@@ -18,7 +18,7 @@ from ..auth import (
     set_session,
 )
 from ..db import get_session
-from ..models import Category, Feedback, Match, ProvisionalResult, Scorer, Standing, SyncLog, Team, utcnow
+from ..models import Category, Feedback, Match, ProvisionalResult, Scorer, Standing, SyncLog, Team, competition_order, utcnow
 from ..parsers.common import ParseError, norm
 from ..schemas import BulkIn, CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, MatchIn, ParseIn, ScorerIn, SyncIn
 from ..serializers import category_admin, iso, provisional_out
@@ -95,7 +95,7 @@ def _get_category(session: Session, category_id: int) -> Category:
 def list_categories(session: Session = Depends(get_session)):
     cats = session.scalars(
         select(Category)
-        .order_by(Category.sort_order, Category.name)
+        .order_by(*competition_order())
         .options(selectinload(Category.standings), selectinload(Category.matches))
     ).all()
     return [category_admin(c) for c in cats]

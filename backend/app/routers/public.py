@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..db import get_session
 from ..config import get_settings
-from ..models import Category, Match
+from ..models import Category, Match, competition_order
 from ..serializers import Ctx, category_detail, category_summary, iso
 from ..services.logos import logo_map
 from ..services.provisional import provisional_map
@@ -41,7 +41,7 @@ def _active(session: Session):
     return session.scalars(
         select(Category)
         .where(Category.active.is_(True))
-        .order_by(Category.sort_order, Category.name)
+        .order_by(*competition_order())
         .options(selectinload(Category.standings), selectinload(Category.matches))
     ).all()
 

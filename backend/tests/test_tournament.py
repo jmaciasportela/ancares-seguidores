@@ -128,3 +128,13 @@ def test_migration_adds_kind_column(client):
     with engine.begin() as conn:
         cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(categories)")}
     assert "kind" in cols
+
+
+def test_leagues_always_before_tournaments(client):
+    client.post("/api/admin/login", json={"password": "secreto"})
+    client.post("/api/admin/categories", json={"name": "Torneo", "kind": "tournament", "sort_order": -5})
+    client.post("/api/admin/categories", json={"name": "Liga B", "sort_order": 2})
+    client.post("/api/admin/categories", json={"name": "Liga A", "sort_order": 1})
+    order = [c["name"] for c in client.get("/api/home").json()["categories"]]
+    assert order == ["Liga A", "Liga B", "Torneo"]
+    assert [c["name"] for c in client.get("/api/admin/categories").json()] == order

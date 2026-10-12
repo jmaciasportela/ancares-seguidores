@@ -5,7 +5,7 @@
 
   const items = [
     { id: 'home', href: '#/', icon: 'home', label: 'Inicio' },
-    { id: 'categories', href: '#/categorias', icon: 'trophy', label: 'Categorías' },
+    { id: 'categories', href: '#/categorias', icon: 'trophy', label: 'Competiciones' },
     { id: 'marcador', href: '#/marcador', icon: 'score', label: 'Marcador' },
     { id: 'club', href: '#/club', icon: 'club', label: 'Club' },
   ];
