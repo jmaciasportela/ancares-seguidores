@@ -109,3 +109,13 @@ class ParseIn(BaseModel):
 
 class BulkIn(BaseModel):
     matches: List[MatchIn] = Field(max_length=300)
+
+
+class CheerIn(BaseModel):
+    category_id: int
+    round_no: int
+    home: str = Field(max_length=200)
+    away: str = Field(max_length=200)
+    kind: str = Field(max_length=20)
+    n: int = Field(default=1, ge=1, le=1000)
+    device: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")

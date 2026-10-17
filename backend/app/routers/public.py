@@ -12,13 +12,15 @@ from ..serializers import Ctx, category_detail, category_summary, iso
 from ..services.logos import logo_map
 from ..services.provisional import provisional_map
 from ..auth import RateLimiter
-from ..schemas import PingIn
-from ..services import stats, usage
+from ..schemas import CheerIn, PingIn
+from ..services import cheers, stats, usage
+from ..services.provisional import match_key, prov_key
 from ..services.importer import is_ours
 from ..services.weather import forecast_for
 
 router = APIRouter(prefix="/api", tags=["public"])
 ping_limiter = RateLimiter(limit=120, window=3600)
+cheer_limiter = RateLimiter(limit=240, window=60)
 
 
 def cached_json(request: Request, payload) -> Response:
@@ -34,7 +36,7 @@ def cached_json(request: Request, payload) -> Response:
 
 
 def make_ctx(session: Session) -> Ctx:
-    return Ctx(logos=logo_map(session), provisional=provisional_map(session))
+    return Ctx(logos=logo_map(session), provisional=provisional_map(session), cheers=cheers.totals_map(session))
 
 
 def _active(session: Session):
@@ -122,3 +124,18 @@ def ping(data: PingIn, request: Request, session: Session = Depends(get_session)
     ping_limiter.check(request)
     usage.record_ping(session, data.device, data.installed, data.platform, data.version)
     return Response(status_code=204)
+
+
+@router.post("/cheers")
+def cheer(data: CheerIn, request: Request, session: Session = Depends(get_session)):
+    """Ánimos anónimos para un partido de Ancares (frases predefinidas, sin texto libre)."""
+    cheer_limiter.check(request)
+    cat = session.get(Category, data.category_id)
+    key = prov_key(data.category_id, data.round_no, data.home, data.away)
+    m = next((x for x in (cat.matches if cat else []) if match_key(x) == key), None)
+    if not m:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+    try:
+        return cheers.add(session, m, data.kind, data.n, usage.device_key(data.device))
+    except cheers.CheerError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc

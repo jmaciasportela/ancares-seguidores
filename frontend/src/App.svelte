@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import BottomNav from './components/BottomNav.svelte';
   import ShareSheet from './components/ShareSheet.svelte';
+  import Celebration from './components/Celebration.svelte';
   import Toasts from './components/Toasts.svelte';
   import { resource } from './lib/api.js';
   import { fade, reduced } from './lib/motion.js';
@@ -69,6 +70,7 @@
 
 <Toasts />
 <ShareSheet />
+<Celebration />
 
 {#key pageKey}
   <main in:fade={{ duration: 200 }}>

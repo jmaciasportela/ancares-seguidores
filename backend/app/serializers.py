@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from .models import Category, Match, ProvisionalResult, Standing
 from .parsers.common import norm
 from .scoring_format import format_of
+from .services.cheers import summary as cheer_summary
 from .services.provisional import Key, match_key
 
 Logos = Dict[str, str]  # nombre normalizado -> URL del logo
@@ -16,6 +17,7 @@ class Ctx:
 
     logos: Logos = field(default_factory=dict)
     provisional: Dict[Key, ProvisionalResult] = field(default_factory=dict)
+    cheers: Dict[Key, Dict[str, int]] = field(default_factory=dict)
 
     def logo(self, name: Optional[str]) -> Optional[str]:
         return self.logos.get(norm(name)) if name else None
@@ -94,6 +96,7 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
         "is_ours": m.is_ours,
         "provisional": provisional_out(prov) if prov else None,
         "tournament": bool(m.category and m.category.is_tournament),
+        "cheers": cheer_summary(ctx.cheers.get(match_key(m), {}), m) if m.is_ours and not m.is_bye else None,
     }
 
 

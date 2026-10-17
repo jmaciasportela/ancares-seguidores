@@ -201,6 +201,23 @@ class DeviceDay(Base):
     device: Mapped[Device] = relationship(back_populates="days")
 
 
+
+class Cheer(Base):
+    """Ánimos acumulados por partido y frase (anónimos; misma clave natural que los provisionales)."""
+
+    __tablename__ = "cheers"
+    __table_args__ = (UniqueConstraint("category_id", "round_no", "home_key", "away_key", "kind"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    home_key: Mapped[str] = mapped_column(String(200))
+    away_key: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(20))
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 def competition_order():
     """Ligas siempre antes que torneos; dentro de cada grupo, el orden del admin."""
     return (case((Category.kind == "tournament", 1), else_=0), Category.sort_order, Category.name)

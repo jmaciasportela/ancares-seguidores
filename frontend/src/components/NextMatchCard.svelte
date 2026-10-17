@@ -2,6 +2,7 @@
   import Countdown from './Countdown.svelte';
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
+  import CheerBar from './CheerBar.svelte';
   import WeatherChip from './WeatherChip.svelte';
   import { formatDay, formatTime, mapsUrl, shortTeam } from '../lib/format.js';
   import { go } from '../lib/router.js';
@@ -38,6 +39,10 @@
   {#if match.starts_at}
     <div class="countdown"><Countdown iso={match.starts_at} /></div>
     <div class="weather"><WeatherChip {match} tone="dark" /></div>
+  {/if}
+
+  {#if match.cheers?.open}
+    <CheerBar {match} />
   {/if}
 
   <footer>

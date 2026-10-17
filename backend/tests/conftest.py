@@ -41,7 +41,7 @@ def client():
 
     Base.metadata.drop_all(engine)
     # Los límites por IP son globales: cada test empieza de cero
-    for limiter in (admin.login_limiter, feedback.limiter, scoring.join_limiter, public.ping_limiter):
+    for limiter in (admin.login_limiter, feedback.limiter, scoring.join_limiter, public.ping_limiter, public.cheer_limiter):
         limiter.hits.clear()
     with TestClient(app) as c:
         yield c

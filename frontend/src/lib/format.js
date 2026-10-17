@@ -53,6 +53,32 @@ export function countdownParts(iso, now = Date.now()) {
   return { d: Math.floor(s / 86400), h: Math.floor((s % 86400) / 3600), m: Math.floor((s % 3600) / 60), s: s % 60 };
 }
 
+/** ¿Es hoy en hora de Madrid? */
+export function isToday(iso, now = new Date()) {
+  return !!iso && dayKey(new Date(iso)) === dayKey(now);
+}
+
+/** Estado de un partido de hoy: 'upcoming' | 'live' (hasta 2 h tras empezar) | 'done' */
+export function matchState(iso, now = Date.now()) {
+  const start = new Date(iso).getTime();
+  if (now < start) return 'upcoming';
+  return now <= start + 2 * 3600e3 ? 'live' : 'done';
+}
+
+/** "en 3 h", "en 25 min" */
+export function timeUntil(iso, now = Date.now()) {
+  const min = Math.max(0, Math.round((new Date(iso).getTime() - now) / 60000));
+  if (min < 60) return `en ${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m && h < 3 ? `en ${h} h ${m} min` : `en ${h} h`;
+}
+
+/** Ruta en Google Maps hasta el pabellón */
+export function directionsUrl(venue) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venue)}`;
+}
+
 export function mapsUrl(venue) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`;
 }

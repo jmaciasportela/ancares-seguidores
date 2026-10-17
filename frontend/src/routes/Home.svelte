@@ -2,14 +2,31 @@
   import Icon from '../components/Icon.svelte';
   import InstallBanner from '../components/InstallBanner.svelte';
   import MatchRow from '../components/MatchRow.svelte';
+  import MatchDayBanner from '../components/MatchDayBanner.svelte';
   import NextMatchCard from '../components/NextMatchCard.svelte';
   import UpcomingCard from '../components/UpcomingCard.svelte';
   import { resource } from '../lib/api.js';
-  import { timeAgo } from '../lib/format.js';
+  import { isToday, timeAgo } from '../lib/format.js';
   import { fly } from '../lib/motion.js';
 
   const home = resource('/api/home');
   const cats = $derived($home.data?.categories || []);
+
+  // Día de partido: partidos de Ancares de hoy (en hora de Madrid)
+  const today = $derived(
+    cats.flatMap((c) =>
+      [c.next_match, c.after_match]
+        .filter((m) => m && m.is_ours && isToday(m.starts_at))
+        .map((m) => ({ match: m, category: c.name })),
+    ),
+  );
+
+  // Ese día la portada se refresca sola: resultados y ánimos casi en directo
+  $effect(() => {
+    if (!today.length) return;
+    const t = setInterval(() => document.visibilityState === 'visible' && home.refresh(), 45000);
+    return () => clearInterval(t);
+  });
 </script>
 
 <div class="page">
@@ -30,6 +47,10 @@
       Aún no hay datos cargados.
     {/if}
   </p>
+
+  {#if today.length}
+    <MatchDayBanner {today} />
+  {/if}
 
   <InstallBanner />
 

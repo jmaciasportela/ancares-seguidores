@@ -24,14 +24,26 @@ function platform() {
   return 'desktop';
 }
 
-export function ping() {
+/** Identificador anónimo de este móvil (aleatorio, solo vive aquí). */
+let memoryId = null;
+export function deviceId() {
   try {
-    if (Date.now() - Number(localStorage.getItem(LAST_KEY) || 0) < EVERY) return;
     let id = localStorage.getItem(ID_KEY);
     if (!id) {
       id = randomId();
       localStorage.setItem(ID_KEY, id);
     }
+    return id;
+  } catch {
+    memoryId ??= randomId(); // modo privado: vale para esta sesión
+    return memoryId;
+  }
+}
+
+export function ping() {
+  try {
+    if (Date.now() - Number(localStorage.getItem(LAST_KEY) || 0) < EVERY) return;
+    const id = deviceId();
     localStorage.setItem(LAST_KEY, String(Date.now()));
     fetch('/api/ping', {
       method: 'POST',

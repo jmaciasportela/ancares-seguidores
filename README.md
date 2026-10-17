@@ -122,6 +122,15 @@ El Excel solo trae la clasificación actual, así que la evolución se reconstru
 
 En **Clasificación**, si hay resultados provisionales, el interruptor «Incluir resultados provisionales» muestra una tabla orientativa con flechas en los equipos que suben o bajan. A igualdad de puntos se respeta el orden oficial.
 
+## Día de partido
+
+El día que juega Ancares (en hora de Madrid), la portada cambia sola:
+- **Cabecera:** «¡HOY JUEGA ANCARES!» con cada partido del día y su estado («en 2 h» o «🔴 En juego»). Cada partido tiene botones para **Cómo llegar** (ruta en Google Maps), **Marcador** y **Compartir previa**.
+- **Ánimos:** en la tarjeta del partido, «💚 ¡Vamos Ancares!» y frases predefinidas, con emojis que suben flotando y un contador colectivo. Se pueden mandar desde 24 h antes hasta 4 h después del partido. Los toques se envían agrupados, son anónimos y nunca se escribe texto libre. Hay límites: 25 por envío y 300 por móvil y partido. Después, el resultado muestra cuántos ánimos recibió.
+- **Celebración:** en cuanto hay resultado, aunque sea provisional, la app lo celebra una sola vez por móvil: confeti y «¡VICTORIA!» si se gana, un mensaje de ánimo si se pierde. Ese día la portada se refresca cada 45 s.
+
+Con «reducir movimiento» activado en el móvil, no hay animaciones.
+
 ## Torneos
 
 Además de las ligas de la FVCL, el admin puede dar de alta **torneos** con *Nueva liga o torneo → Torneo*. No llevan enlaces de la federación: los partidos se meten a mano desde el botón **Partidos** de la tarjeta del torneo.

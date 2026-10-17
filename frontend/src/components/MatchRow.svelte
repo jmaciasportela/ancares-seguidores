@@ -49,6 +49,7 @@
           <span class="pill" class:w={outcome} class:l={!outcome}>{outcome ? 'Victoria' : 'Derrota'}</span>
         {/if}
         {#if score.partials.length}<span class="partials">{partialsText(score)}</span>{/if}
+        {#if match.cheers?.total}<span class="cheers">💚 {match.cheers.total} ánimos</span>{/if}
         {#if score.provisional}
           <span class="prov-note">Pendiente de confirmar por {match.tournament ? 'la organización' : 'la federación'}{score.early ? ' · terminado antes de tiempo' : ''}</span>
         {/if}
@@ -191,6 +192,10 @@
   }
   .partials {
     font-variant-numeric: tabular-nums;
+  }
+  .cheers {
+    font-weight: 650;
+    color: var(--brand-strong);
   }
   .pill.prov {
     background: rgba(242, 165, 22, 0.16);
