@@ -4,21 +4,22 @@
   import TeamBadge from './TeamBadge.svelte';
   import CheerBar from './CheerBar.svelte';
   import WeatherChip from './WeatherChip.svelte';
-  import { formatDay, formatTime, mapsUrl, shortTeam } from '../lib/format.js';
+  import { directionsUrl, formatDay, formatTime, isToday, mapsUrl, shortTeam } from '../lib/format.js';
+  import TodayBadge from './TodayBadge.svelte';
   import { go } from '../lib/router.js';
   import { matchText } from '../lib/share.js';
   import { openShare } from '../lib/shareSheet.js';
   import { dataFromMatch } from '../lib/shareData.js';
 
   let { match, category } = $props();
-  // "Llevar marcador" solo el día del partido
-  const today = $derived(match.starts_at && formatDay(match.starts_at) === 'Hoy');
+  // Día del partido: resaltado, «Llevar marcador» y ruta hasta el pabellón
+  const today = $derived(isToday(match.starts_at));
 </script>
 
-<article class="next">
+<article class="next" class:today id="match-{match.id}">
   <header>
     <span class="label">Próximo partido</span>
-    <span class="round">{match.round_name}</span>
+    {#if today}<TodayBadge startsAt={match.starts_at} />{:else}<span class="round">{match.round_name}</span>{/if}
   </header>
 
   <div class="teams">
@@ -47,7 +48,7 @@
 
   <footer>
     {#if match.venue}
-      <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
+      <a class="venue" href={today ? directionsUrl(match.venue) : mapsUrl(match.venue)} target="_blank" rel="noopener">
         <Icon name="pin" size={16} />
         <span class="venue-text">{match.venue}</span>
       </a>
@@ -100,6 +101,25 @@
   }
   .label {
     color: #8ee39c;
+  }
+  /* Partido de hoy: borde que brilla con un pulso */
+  .today {
+    animation: glow 2.2s ease-in-out infinite;
+  }
+  @keyframes glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 2px rgba(142, 227, 156, 0.95), 0 10px 30px rgba(11, 26, 16, 0.35);
+    }
+    50% {
+      box-shadow: 0 0 0 5px rgba(142, 227, 156, 0.35), 0 0 30px rgba(49, 169, 67, 0.65);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .today {
+      animation: none;
+      box-shadow: 0 0 0 3px rgba(142, 227, 156, 0.9);
+    }
   }
   .round {
     opacity: 0.7;

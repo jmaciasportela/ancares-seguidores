@@ -2,16 +2,18 @@
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
   import WeatherChip from './WeatherChip.svelte';
-  import { formatDay, formatTime, isOursName, mapsUrl, shortTeam } from '../lib/format.js';
+  import { directionsUrl, formatDay, formatTime, isOursName, isToday, mapsUrl, shortTeam } from '../lib/format.js';
+  import TodayBadge from './TodayBadge.svelte';
 
   /** Tarjeta compacta para el partido que va después del próximo: versión pequeña de NextMatchCard. */
   let { match } = $props();
+  const today = $derived(isToday(match.starts_at));
 </script>
 
-<article class="upcoming">
+<article class="upcoming" class:today id="match-{match.id}">
   <header>
     <span class="label">Siguiente partido</span>
-    <span class="round">{match.round_name}</span>
+    {#if today}<TodayBadge startsAt={match.starts_at} />{:else}<span class="round">{match.round_name}</span>{/if}
   </header>
 
   <div class="teams">
@@ -31,7 +33,7 @@
 
   <footer>
     {#if match.venue}
-      <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
+      <a class="venue" href={today ? directionsUrl(match.venue) : mapsUrl(match.venue)} target="_blank" rel="noopener">
         <Icon name="pin" size={14} />
         <span class="ellipsis">{match.venue}</span>
       </a>
@@ -72,6 +74,25 @@
       background:
         radial-gradient(120% 100% at 100% 0%, rgba(49, 169, 67, 0.22), transparent 60%),
         linear-gradient(160deg, #15301d, var(--surface) 70%);
+    }
+  }
+  /* Partido de hoy: borde que brilla con un pulso */
+  .today {
+    animation: glow 2.2s ease-in-out infinite;
+  }
+  @keyframes glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 2px rgba(142, 227, 156, 0.95), 0 10px 30px rgba(11, 26, 16, 0.35);
+    }
+    50% {
+      box-shadow: 0 0 0 5px rgba(142, 227, 156, 0.35), 0 0 30px rgba(49, 169, 67, 0.65);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .today {
+      animation: none;
+      box-shadow: 0 0 0 3px rgba(142, 227, 156, 0.9);
     }
   }
   header {

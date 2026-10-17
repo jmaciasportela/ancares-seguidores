@@ -130,7 +130,8 @@ En **Clasificación**, si hay resultados provisionales, el interruptor «Incluir
 ## Día de partido
 
 El día que juega Ancares (en hora de Madrid), la portada cambia sola:
-- **Cabecera:** «¡HOY JUEGA ANCARES!» con cada partido del día y su estado («en 2 h» o «🔴 En juego»). Cada partido tiene botones para **Cómo llegar** (ruta en Google Maps), **Marcador** y **Compartir previa**.
+- **Aviso:** una franja animada «¡HOY JUEGA ANCARES!» con la hora (o las horas, si hay varios partidos). Al tocarla, baja hasta la tarjeta del primer partido.
+- **Tarjetas del día:** los partidos de hoy brillan con un pulso verde y llevan la etiqueta «🏐 HOY», que pasa a «🔴 EN JUEGO» desde la hora de inicio hasta 2 h después. El pabellón abre la ruta en Google Maps (**Cómo llegar**) y aparece el botón **Marcador**.
 - **Ánimos:** en la tarjeta del partido, «💚 ¡Vamos Ancares!» y frases predefinidas, con emojis que suben flotando y un contador colectivo. Se pueden mandar desde 24 h antes hasta 4 h después del partido. Los toques se envían agrupados, son anónimos y nunca se escribe texto libre. Hay límites: 25 por envío y 300 por móvil y partido. Después, el resultado muestra cuántos ánimos recibió.
 - **Celebración:** en cuanto hay resultado, aunque sea provisional, la app lo celebra una sola vez por móvil: confeti y «¡VICTORIA!» si se gana, un mensaje de ánimo si se pierde. Ese día la portada se refresca cada 45 s.
 
