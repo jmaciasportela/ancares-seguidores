@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isToday, matchState, timeUntil } from './format.js';
+import { isToday, matchState, timeUntil, todayMatches } from './format.js';
 
 describe('día de partido (hora de Madrid)', () => {
   // 17 oct 2026, 10:00 en Madrid (08:00 UTC, horario de verano)
@@ -24,5 +24,18 @@ describe('día de partido (hora de Madrid)', () => {
     expect(timeUntil(start, Date.parse('2026-10-17T14:35:00Z'))).toBe('en 25 min');
     expect(timeUntil(start, Date.parse('2026-10-17T13:20:00Z'))).toBe('en 1 h 40 min');
     expect(timeUntil(start, Date.parse('2026-10-17T08:00:00Z'))).toBe('en 7 h');
+  });
+
+  it('los partidos de hoy salen por hora, aunque sean de competiciones distintas', () => {
+    const m = (id, iso, ours = true) => ({ id, starts_at: iso, is_ours: ours });
+    const cats = [
+      { name: 'Liga Cadete', next_match: m(1, '2026-10-17T16:00:00Z'), after_match: m(2, '2026-10-18T09:00:00Z') },
+      { name: 'Liga Infantil', next_match: m(3, '2026-10-17T09:30:00Z'), after_match: m(4, '2026-10-17T18:00:00Z') },
+      { name: 'Torneo', next_match: m(5, '2026-10-17T12:00:00Z'), after_match: null },
+      { name: 'Otra', next_match: m(6, '2026-10-17T11:00:00Z', false), after_match: null },
+    ];
+    const out = todayMatches(cats, now);
+    expect(out.map((x) => x.match.id)).toEqual([3, 5, 1, 4]); // mañana (2) y no-Ancares (6) fuera
+    expect(out[0].category).toBe('Liga Infantil');
   });
 });

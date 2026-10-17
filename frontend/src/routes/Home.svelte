@@ -6,20 +6,14 @@
   import NextMatchCard from '../components/NextMatchCard.svelte';
   import UpcomingCard from '../components/UpcomingCard.svelte';
   import { resource } from '../lib/api.js';
-  import { isToday, timeAgo } from '../lib/format.js';
+  import { timeAgo, todayMatches } from '../lib/format.js';
   import { fly } from '../lib/motion.js';
 
   const home = resource('/api/home');
   const cats = $derived($home.data?.categories || []);
 
-  // Día de partido: partidos de Ancares de hoy (en hora de Madrid)
-  const today = $derived(
-    cats.flatMap((c) =>
-      [c.next_match, c.after_match]
-        .filter((m) => m && m.is_ours && isToday(m.starts_at))
-        .map((m) => ({ match: m, category: c.name })),
-    ),
-  );
+  // Día de partido: partidos de Ancares de hoy (en hora de Madrid), del primero al último
+  const today = $derived(todayMatches(cats));
 
   // Ese día la portada se refresca sola: resultados y ánimos casi en directo
   $effect(() => {

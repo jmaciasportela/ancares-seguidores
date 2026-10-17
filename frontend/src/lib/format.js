@@ -58,6 +58,20 @@ export function isToday(iso, now = new Date()) {
   return !!iso && dayKey(new Date(iso)) === dayKey(now);
 }
 
+/**
+ * Partidos de Ancares de hoy en todas las competiciones, por orden cronológico.
+ * Devuelve [{ match, category }].
+ */
+export function todayMatches(categories, now = new Date()) {
+  return categories
+    .flatMap((c) =>
+      [c.next_match, c.after_match]
+        .filter((m) => m && m.is_ours && isToday(m.starts_at, now))
+        .map((m) => ({ match: m, category: c.name })),
+    )
+    .sort((a, b) => new Date(a.match.starts_at) - new Date(b.match.starts_at));
+}
+
 /** Estado de un partido de hoy: 'upcoming' | 'live' (hasta 2 h tras empezar) | 'done' */
 export function matchState(iso, now = Date.now()) {
   const start = new Date(iso).getTime();
