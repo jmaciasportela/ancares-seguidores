@@ -1,20 +1,30 @@
 <script>
-  import { formatTime, isOursName, shortTeam } from '../lib/format.js';
+  import { formatTime, isOursName, liveMode, liveText, shortTeam } from '../lib/format.js';
   import { pop, reduced } from '../lib/motion.js';
 
   /** today: [{ match, category }] partidos de Ancares de hoy, ya ordenados por hora */
   let { today } = $props();
 
   const rival = (m) => (isOursName(m.home) ? m.away : m.home);
+  // Partido que se está retransmitiendo ahora mismo, si lo hay
+  const onAir = $derived(today.find((t) => liveMode(t.match.live) === 'live'));
+  // Tanteo con Ancares primero («1-0 · 18-15 vs Rival»)
+  const oursFirst = (m) => {
+    const l = m.live;
+    return isOursName(m.home) ? l : { ...l, sets: [...l.sets].reverse(), current: [...l.current].reverse() };
+  };
   const line = $derived(
-    today.length === 1
-      ? `${formatTime(today[0].match.starts_at)} vs ${shortTeam(rival(today[0].match))}`
-      : `${today.length} partidos: ${today.map((t) => formatTime(t.match.starts_at)).join(', ').replace(/, ([^,]*)$/, ' y $1')}`,
+    onAir
+      ? `🔴 En directo: ${liveText(oursFirst(onAir.match))} vs ${shortTeam(rival(onAir.match))}`
+      : today.length === 1
+        ? `${formatTime(today[0].match.starts_at)} vs ${shortTeam(rival(today[0].match))}`
+        : `${today.length} partidos: ${today.map((t) => formatTime(t.match.starts_at)).join(', ').replace(/, ([^,]*)$/, ' y $1')}`,
   );
 
-  // Al tocar el aviso, baja hasta la tarjeta del primer partido del día
+  // Al tocar el aviso, baja hasta la tarjeta del partido en directo o del primero del día
   function goToMatch() {
-    document.getElementById(`match-${today[0].match.id}`)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
+    const target = (onAir || today[0]).match;
+    document.getElementById(`match-${target.id}`)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
   }
 </script>
 

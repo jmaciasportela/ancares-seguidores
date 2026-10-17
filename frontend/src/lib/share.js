@@ -31,20 +31,20 @@ export function matchText(category, m) {
 }
 
 /** Comparte texto con la hoja nativa del móvil; si no existe, abre WhatsApp. */
-export async function shareText(text) {
+export async function shareText(text, url = APP_URL) {
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Ancares Seguidores', text, url: APP_URL });
+      await navigator.share({ title: 'Ancares Seguidores', text, url });
       return;
     } catch (err) {
       if (err?.name === 'AbortError') return;
     }
   }
-  const wa = `https://wa.me/?text=${encodeURIComponent(`${text}\n\n${APP_URL}`)}`;
+  const wa = `https://wa.me/?text=${encodeURIComponent(`${text}\n\n${url}`)}`;
   const win = window.open(wa, '_blank', 'noopener');
   if (!win) {
     try {
-      await navigator.clipboard.writeText(`${text}\n\n${APP_URL}`);
+      await navigator.clipboard.writeText(`${text}\n\n${url}`);
       toast('Copiado al portapapeles', 'ok');
     } catch {
       toast('No se pudo compartir', 'error');

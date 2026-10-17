@@ -19,6 +19,7 @@
     if (first === 'c' && second) return { page: 'category', nav: 'categories', slug: second };
     if (first === 'club') return { page: 'club', nav: 'club' };
     if (first === 'marcador') return { page: 'marcador', nav: 'marcador' };
+    if (first === 'directo' && second) return { page: 'live', nav: null, slug: second };
     if (first === 'admin') return { page: 'admin', nav: null };
     return { page: 'home', nav: 'home' };
   });
@@ -85,6 +86,8 @@
     {:else if view.page === 'marcador'}
       <!-- Marcador y admin se cargan aparte: la portada no paga su peso -->
       {#await import('./routes/Scoreboard.svelte') then m}<m.default />{/await}
+    {:else if view.page === 'live'}
+      {#await import('./routes/Live.svelte') then m}<m.default id={view.slug} />{/await}
     {:else if view.page === 'admin'}
       {#await import('./routes/admin/Admin.svelte') then m}<m.default />{/await}
     {/if}

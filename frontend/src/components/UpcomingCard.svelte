@@ -2,18 +2,20 @@
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
   import WeatherChip from './WeatherChip.svelte';
-  import { directionsUrl, formatDay, formatTime, isOursName, isToday, mapsUrl, shortTeam } from '../lib/format.js';
+  import { directionsUrl, formatDay, formatTime, isOursName, isToday, liveMode, mapsUrl, shortTeam } from '../lib/format.js';
+  import { go } from '../lib/router.js';
   import TodayBadge from './TodayBadge.svelte';
 
   /** Tarjeta compacta para el partido que va después del próximo: versión pequeña de NextMatchCard. */
   let { match } = $props();
   const today = $derived(isToday(match.starts_at));
+  const mode = $derived(liveMode(match.live));
 </script>
 
 <article class="upcoming" class:today id="match-{match.id}">
   <header>
     <span class="label">Siguiente partido</span>
-    {#if today}<TodayBadge startsAt={match.starts_at} />{:else}<span class="round">{match.round_name}</span>{/if}
+    {#if today || mode}<TodayBadge startsAt={match.starts_at} live={match.live} />{:else}<span class="round">{match.round_name}</span>{/if}
   </header>
 
   <div class="teams">
@@ -22,8 +24,14 @@
       <span class="name">{shortTeam(match.home)}</span>
     </div>
     <div class="when">
-      <span class="day">{formatDay(match.starts_at)}</span>
-      {#if match.starts_at}<b class="time">{formatTime(match.starts_at)}</b>{:else}<b class="time vs">VS</b>{/if}
+      {#if mode}
+        {@const l = match.live}
+        <span class="day">{mode === 'final' ? 'Final' : `Set ${l.set_no}${l.sets[0] || l.sets[1] ? ` · sets ${l.sets[0]}-${l.sets[1]}` : ''}`}</span>
+        <b class="time">{(mode === 'final' ? l.sets : l.current).join('-')}</b>
+      {:else}
+        <span class="day">{formatDay(match.starts_at)}</span>
+        {#if match.starts_at}<b class="time">{formatTime(match.starts_at)}</b>{:else}<b class="time vs">VS</b>{/if}
+      {/if}
     </div>
     <div class="team" class:ours={isOursName(match.away)}>
       <TeamBadge name={match.away} logo={match.away_logo} size={44} />
@@ -40,7 +48,12 @@
     {:else}
       <span class="venue muted"><Icon name="pin" size={14} /> Pabellón por confirmar</span>
     {/if}
-    <WeatherChip {match} compact />
+    {#if !mode}<WeatherChip {match} compact />{/if}
+    {#if (today || mode) && match.live_id}
+      <button class="live-pill" class:on={mode === 'live'} onclick={() => go(`/directo/${match.live_id}`)}>
+        <i aria-hidden="true"></i> Directo
+      </button>
+    {/if}
   </footer>
 </article>
 
@@ -188,5 +201,41 @@
   }
   .venue :global(svg) {
     flex: none;
+  }
+  .live-pill {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .live-pill i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+  }
+  .live-pill.on {
+    background: #d92d33;
+  }
+  .live-pill.on i {
+    background: #fff;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-pill.on i {
+      animation: none;
+    }
   }
 </style>

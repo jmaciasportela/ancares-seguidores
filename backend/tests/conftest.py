@@ -37,11 +37,12 @@ def client():
 
     from app.db import Base, engine
     from app.main import app
-    from app.routers import admin, feedback, public, scoring
+    from app.routers import admin, feedback, live, public, scoring
 
     Base.metadata.drop_all(engine)
     # Los límites por IP son globales: cada test empieza de cero
-    for limiter in (admin.login_limiter, feedback.limiter, scoring.join_limiter, public.ping_limiter, public.cheer_limiter):
+    for limiter in (admin.login_limiter, feedback.limiter, scoring.join_limiter, public.ping_limiter, public.cheer_limiter,
+                    live.push_limiter):
         limiter.hits.clear()
     with TestClient(app) as c:
         yield c

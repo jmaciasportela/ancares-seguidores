@@ -6,6 +6,7 @@ from collections import defaultdict, deque
 from typing import Deque, Dict, Optional
 
 from fastapi import HTTPException, Request, Response
+from starlette.requests import HTTPConnection
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from .config import get_settings
@@ -103,6 +104,11 @@ def scorer_id_from(request: Request) -> Optional[int]:
     return sid if isinstance(sid, int) else None
 
 
+def client_ip(conn: HTTPConnection) -> str:
+    """IP del cliente (detrás de Nginx Proxy Manager, la primera de X-Forwarded-For). Vale también para WebSockets."""
+    return conn.headers.get("x-forwarded-for", "").split(",")[0].strip() or (conn.client.host if conn.client else "?")
+
+
 class RateLimiter:
     """Límite en memoria por IP. Suficiente para una app de un solo proceso."""
 
@@ -111,9 +117,7 @@ class RateLimiter:
         self.hits: Dict[str, Deque[float]] = defaultdict(deque)
 
     def check(self, request: Request) -> None:
-        ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
-            request.client.host if request.client else "?"
-        )
+        ip = client_ip(request)
         now = time.monotonic()
         q = self.hits[ip]
         while q and now - q[0] > self.window:

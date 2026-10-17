@@ -79,6 +79,20 @@ export function matchState(iso, now = Date.now()) {
   return now <= start + 2 * 3600e3 ? 'live' : 'done';
 }
 
+/** Directo de un partido (match.live): 'live' si se está emitiendo, 'final' si ha terminado, o null. */
+export function liveMode(live) {
+  if (!live) return null;
+  if (live.status === 'finished' || live.status === 'match_over') return 'final';
+  return live.on ? 'live' : null;
+}
+
+/** «Set 2: 18-15 · sets 1-0» mientras se juega, o «2-1» si ha terminado. */
+export function liveText(live) {
+  const [h, a] = live.sets;
+  if (liveMode(live) === 'final') return `${h}-${a}`;
+  return `Set ${live.set_no}: ${live.current[0]}-${live.current[1]}${h || a ? ` · sets ${h}-${a}` : ''}`;
+}
+
 /** "en 3 h", "en 25 min" */
 export function timeUntil(iso, now = Date.now()) {
   const min = Math.max(0, Math.round((new Date(iso).getTime() - now) / 60000));

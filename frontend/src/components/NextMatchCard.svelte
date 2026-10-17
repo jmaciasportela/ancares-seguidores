@@ -4,8 +4,9 @@
   import TeamBadge from './TeamBadge.svelte';
   import CheerBar from './CheerBar.svelte';
   import WeatherChip from './WeatherChip.svelte';
-  import { directionsUrl, formatDay, formatTime, isToday, mapsUrl, shortTeam } from '../lib/format.js';
+  import { directionsUrl, formatDay, formatTime, isToday, liveMode, mapsUrl, shortTeam } from '../lib/format.js';
   import TodayBadge from './TodayBadge.svelte';
+  import { pop } from '../lib/motion.js';
   import { go } from '../lib/router.js';
   import { matchText } from '../lib/share.js';
   import { openShare } from '../lib/shareSheet.js';
@@ -14,12 +15,15 @@
   let { match, category } = $props();
   // Día del partido: resaltado, «Llevar marcador» y ruta hasta el pabellón
   const today = $derived(isToday(match.starts_at));
+  // Marcador en directo: si alguien lo está retransmitiendo, se ve el tanteo en la tarjeta
+  const live = $derived(match.live);
+  const mode = $derived(liveMode(live));
 </script>
 
 <article class="next" class:today id="match-{match.id}">
   <header>
     <span class="label">Próximo partido</span>
-    {#if today}<TodayBadge startsAt={match.starts_at} />{:else}<span class="round">{match.round_name}</span>{/if}
+    {#if today || mode}<TodayBadge startsAt={match.starts_at} {live} />{:else}<span class="round">{match.round_name}</span>{/if}
   </header>
 
   <div class="teams">
@@ -28,8 +32,14 @@
       <span class="name">{shortTeam(match.home)}</span>
     </div>
     <div class="vs">
-      <span class="time">{match.starts_at ? formatTime(match.starts_at) : 'VS'}</span>
-      <span class="day">{formatDay(match.starts_at)}</span>
+      {#if mode}
+        {@const big = mode === 'final' ? live.sets : live.current}
+        {#key big.join()}<span class="time score" in:pop>{big[0]}-{big[1]}</span>{/key}
+        <span class="day">{mode === 'final' ? 'Final' : `Set ${live.set_no}${live.sets[0] || live.sets[1] ? ` · sets ${live.sets[0]}-${live.sets[1]}` : ''}`}</span>
+      {:else}
+        <span class="time">{match.starts_at ? formatTime(match.starts_at) : 'VS'}</span>
+        <span class="day">{formatDay(match.starts_at)}</span>
+      {/if}
     </div>
     <div class="team">
       <TeamBadge name={match.away} logo={match.away_logo} size={52} />
@@ -37,7 +47,7 @@
     </div>
   </div>
 
-  {#if match.starts_at}
+  {#if match.starts_at && !mode}
     <div class="countdown"><Countdown iso={match.starts_at} /></div>
     <div class="weather"><WeatherChip {match} tone="dark" /></div>
   {/if}
@@ -55,9 +65,12 @@
     {:else}
       <span class="venue"><Icon name="pin" size={16} /> Pabellón por confirmar</span>
     {/if}
-    {#if today}
-      <button class="scorer-btn" onclick={() => go(`/marcador?pick=${match.id}`)}>
-        <Icon name="score" size={17} /> Marcador
+    {#if (today || mode) && match.live_id}
+      <button class="live-btn" class:on={mode === 'live'} onclick={() => go(`/directo/${match.live_id}`)}>
+        <i aria-hidden="true"></i> {mode === 'final' ? 'Ver final' : 'Ver en directo'}
+      </button>
+      <button class="icon-btn" onclick={() => go(`/marcador?pick=${match.id}`)} aria-label="Llevar el marcador" title="Llevar el marcador">
+        <Icon name="score" size={18} />
       </button>
     {/if}
     <button class="share" onclick={() => openShare(dataFromMatch(match, category), matchText(category, match))} aria-label="Compartir partido">
@@ -199,19 +212,51 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .scorer-btn {
+  .time.score {
+    color: #8ee39c;
+  }
+  /* Botón al visor en directo: el punto rojo late si se está retransmitiendo */
+  .live-btn {
     flex: none;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     height: 40px;
     padding: 0 14px;
     border-radius: 999px;
-    background: var(--brand);
-    color: #fff;
-    font-weight: 700;
+    background: #fff;
+    color: #0b1a10;
+    font-weight: 800;
     font-size: 14px;
+    transition: transform 0.15s;
   }
+  .live-btn:active {
+    transform: scale(0.95);
+  }
+  .live-btn i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9aa5a0;
+  }
+  .live-btn.on {
+    color: #d92d33;
+  }
+  .live-btn.on i {
+    background: #ff3b41;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-btn.on i {
+      animation: none;
+    }
+  }
+  .icon-btn,
   .share {
     flex: none;
     width: 40px;
@@ -223,6 +268,7 @@
     background: rgba(255, 255, 255, 0.12);
     transition: transform 0.15s;
   }
+  .icon-btn:active,
   .share:active {
     transform: scale(0.9);
   }

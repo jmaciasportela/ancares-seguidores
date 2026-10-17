@@ -1,9 +1,10 @@
 import { writable } from 'svelte/store';
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, data = null) {
     super(message);
     this.status = status;
+    this.data = data; // detalle estructurado, si el servidor lo manda (p. ej. quién retransmite)
   }
 }
 
@@ -25,8 +26,10 @@ export async function api(path, { method = 'GET', json, form } = {}) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     let msg = data?.detail;
+    const extra = msg && typeof msg === 'object' && !Array.isArray(msg) ? msg : null;
     if (Array.isArray(msg)) msg = msg.map((e) => e.msg).join('. ');
-    throw new ApiError(msg || `Error ${res.status}`, res.status);
+    else if (extra) msg = extra.message;
+    throw new ApiError(msg || `Error ${res.status}`, res.status, extra);
   }
   return data;
 }

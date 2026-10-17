@@ -3,7 +3,8 @@
   import { shortTeam } from '../lib/format.js';
   import { pop } from '../lib/motion.js';
 
-  let { team, points, sets = 0, setsToWin = null, serving = false, tone = 'dark', hint = '', onTap } = $props();
+  // readonly: visor del marcador en directo (no se puede tocar). flash: sube cada vez que este lado suma
+  let { team, points, sets = 0, setsToWin = null, serving = false, tone = 'dark', hint = '', onTap, readonly = false, flash = 0 } = $props();
 
   // Evita sumar dos puntos por un doble toque accidental
   let last = 0;
@@ -15,7 +16,15 @@
   }
 </script>
 
-<button class="pad {tone}" onclick={tap} aria-label="Punto para {team.name}. Lleva {points}">
+<svelte:element
+  this={readonly ? 'div' : 'button'}
+  class="pad {tone}"
+  class:readonly
+  onclick={readonly ? undefined : tap}
+  role={readonly ? 'group' : undefined}
+  aria-label={readonly ? `${team.name}: ${points}` : `Punto para ${team.name}. Lleva ${points}`}
+>
+  {#key flash}{#if flash}<span class="flash" aria-hidden="true"></span>{/if}{/key}
   <div class="head">
     <TeamBadge name={team.name} logo={team.logo} size={34} />
     <span class="name ellipsis">{shortTeam(team.name)}</span>
@@ -38,7 +47,7 @@
     </span>
     {#if hint}<span class="hint">{hint}</span>{/if}
   </div>
-</button>
+</svelte:element>
 
 <style>
   .pad {
@@ -56,8 +65,29 @@
     overflow: hidden;
     transition: filter 0.15s;
   }
-  .pad:active {
+  .pad:active:not(.readonly) {
     filter: brightness(1.12);
+  }
+  /* Destello al sumar un punto (visor en directo) */
+  .flash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(80% 70% at 50% 55%, rgba(255, 255, 255, 0.45), transparent 70%);
+    animation: flash 0.9s ease-out forwards;
+  }
+  @keyframes flash {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flash {
+      animation-duration: 0.01s;
+    }
   }
   .pad.green {
     background:

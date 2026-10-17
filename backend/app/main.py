@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import init_db
-from .routers import admin, feedback, public, scoring
+from .routers import admin, feedback, live, public, scoring
 from .services.mailer import email_enabled, missing_settings
 from .services.sync import start_scheduler
 
@@ -34,6 +34,7 @@ app.add_middleware(GZipMiddleware, minimum_size=800)
 
 app.include_router(public.router)
 app.include_router(scoring.router)
+app.include_router(live.router)
 app.include_router(feedback.router)
 app.include_router(admin.router)
 app.include_router(admin.protected)

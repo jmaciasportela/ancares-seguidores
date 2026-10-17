@@ -13,7 +13,7 @@ from ..services.logos import logo_map
 from ..services.provisional import provisional_map
 from ..auth import RateLimiter
 from ..schemas import CheerIn, PingIn
-from ..services import cheers, stats, usage
+from ..services import cheers, live, stats, usage
 from ..services.provisional import match_key, prov_key
 from ..services.importer import is_ours
 from ..services.weather import forecast_for
@@ -36,7 +36,12 @@ def cached_json(request: Request, payload) -> Response:
 
 
 def make_ctx(session: Session) -> Ctx:
-    return Ctx(logos=logo_map(session), provisional=provisional_map(session), cheers=cheers.totals_map(session))
+    return Ctx(
+        logos=logo_map(session),
+        provisional=provisional_map(session),
+        cheers=cheers.totals_map(session),
+        live=live.live_map(session),
+    )
 
 
 def _active(session: Session):

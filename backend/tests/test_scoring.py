@@ -155,6 +155,23 @@ def test_scoring_matches_suggests_nearest(client, league):
     assert items[0]["score_format"]["sets"] == 3 and items[0]["category_slug"] == cat["slug"]
 
 
+def test_admin_can_score_matches_out_of_date(client, league):
+    """A veces se juega otro día u otra hora: el admin ve todos los partidos sin resultado."""
+    cat, match = league
+    items = client.get("/api/scoring/matches").json()  # como admin
+    assert items[0]["in_window"] and items[0]["away"] == "VCV Castilla"
+    later = [i for i in items if not i["in_window"]]
+    assert later and all(not i["played"] for i in later)
+    assert any(i["minutes_from_now"] is None for i in later)  # también los que aún no tienen fecha
+    assert items[-1]["minutes_from_now"] is None  # los sin fecha, al final
+
+    # Un anotador solo ve los de estos días
+    code = make_scorer(client)["code"]
+    client.cookies.clear()
+    client.post("/api/scorer/join", json={"code": code})
+    assert all(i["in_window"] for i in client.get("/api/scoring/matches").json())
+
+
 def test_admin_scorer_management(client, league):
     s = make_scorer(client, "Luis")
     regen = client.post(f"/api/admin/scorers/{s['id']}/regenerate").json()

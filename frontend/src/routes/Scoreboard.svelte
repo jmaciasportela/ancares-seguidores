@@ -7,14 +7,16 @@
   import TeamBadge from '../components/TeamBadge.svelte';
   import { api, resource } from '../lib/api.js';
   import { formatWhen, isOursName, partialsText, shortTeam } from '../lib/format.js';
+  import { claimLive, createEmitter, fromLive, hasProgress, liveScoreText, toLive } from '../lib/live.js';
   import { fly } from '../lib/motion.js';
   import { go, route } from '../lib/router.js';
   import { refreshScorer, scorer } from '../lib/scorer.js';
   import * as S from '../lib/scoring.js';
-  import { scoreText } from '../lib/share.js';
+  import { scoreText, shareText } from '../lib/share.js';
   import { dataFromGame } from '../lib/shareData.js';
   import { openShare } from '../lib/shareSheet.js';
   import { toast } from '../lib/toast.js';
+  import { keepScreenOn } from '../lib/wakelock.js';
 
   const KEY = 'ancares:marcador';
   const FORMAT_KEY = 'ancares:marcador-formato';
@@ -48,7 +50,13 @@
   let freeAway = $state('');
   let format = $state(read(FORMAT_KEY) || { ...S.DEFAULT_FORMAT });
 
-  const whenLabel = (m) => (Math.abs(m.minutes_from_now) <= 90 ? 'Ahora' : formatWhen(m.starts_at));
+  const whenLabel = (m) =>
+    m.minutes_from_now != null && Math.abs(m.minutes_from_now) <= 90 ? 'Ahora' : m.starts_at ? formatWhen(m.starts_at) : 'Sin fecha';
+  // El admin ve también los partidos de otras fechas (a veces se juegan otro día u otra hora que la del Excel)
+  let showAll = $state(false);
+  const nearby = $derived(candidates.filter((c) => c.in_window !== false));
+  const others = $derived(candidates.filter((c) => c.in_window === false));
+  const sameMatch = (c, g) => !!g && c.category_id === g.category_id && c.round_no === g.round_no && c.home === g.home && c.away === g.away;
   const rivalOf = (m) => (isOursName(m.home) ? m.away : m.home);
   const rivalLogo = (m) => (isOursName(m.home) ? m.away_logo : m.home_logo);
 
@@ -67,21 +75,20 @@
       loadingCandidates = false;
     }
     const pick = Number($route.query.get('pick'));
-    const preferred = candidates.find((c) => c.id === pick) || candidates.find((c) => Math.abs(c.minutes_from_now) <= 240);
+    const preferred =
+      candidates.find((c) => c.id === pick) ||
+      nearby.find((c) => c.minutes_from_now != null && Math.abs(c.minutes_from_now) <= 240);
+    if (preferred?.in_window === false) showAll = true;
     choose(preferred || 'free');
   });
 
-  function start() {
+  async function start() {
     write(FORMAT_KEY, format);
     const m = candidates.find((c) => c.id === selected);
     if (m) {
-      game = S.newMatch({
-        format,
-        home: { name: m.home, logo: m.home_logo },
-        away: { name: m.away, logo: m.away_logo },
-        oursSide: isOursName(m.home) ? 'home' : 'away',
-        match: pickMatch(m),
-      });
+      // Con código de anotador, el partido se retransmite en directo
+      if ($scorer.can_publish && m.live_id) await goLive(m);
+      else game = linkedGame(m);
     } else {
       const home = freeHome.trim() || 'Ancares';
       const away = freeAway.trim() || 'Rival';
@@ -90,8 +97,22 @@
     }
   }
 
+  /** Partido de liga nuevo o, si se recoge una retransmisión empezada, desde donde iba. */
+  function linkedGame(m, live = null, state = null) {
+    const base = {
+      format,
+      home: { name: m.home, logo: m.home_logo },
+      away: { name: m.away, logo: m.away_logo },
+      oursSide: isOursName(m.home) ? 'home' : 'away',
+      match: pickMatch(m),
+    };
+    const g = state && hasProgress(state) ? fromLive(state, base) : S.newMatch(base);
+    return live ? { ...g, live } : g;
+  }
+
   const pickMatch = (m) => ({
     id: m.id,
+    live_id: m.live_id,
     category_id: m.category_id,
     category: m.category,
     category_slug: m.category_slug,
@@ -101,6 +122,104 @@
     away: m.away,
     starts_at: m.starts_at,
   });
+
+  // --- en directo ----------------------------------------------------------------
+  // Quien anota con código emite cada punto; las familias lo ven en #/directo/{id}
+  let starting = $state(false);
+  let conflict = $state(null); // otra persona ya retransmite: {by, stale, can_takeover, state, m?}
+  let liveInfo = $state(null); // {status, viewers, by, message}
+
+  /** Reclama la retransmisión y empieza el marcador (o lo sigue desde lo emitido). */
+  async function goLive(m, takeover = false) {
+    starting = true;
+    try {
+      const r = await claimLive(m.live_id, takeover);
+      conflict = null;
+      const resume = hasProgress(r.state);
+      game = linkedGame(m, { id: m.live_id }, resume ? r.state : null);
+      if (resume) toast(`Sigues desde el marcador en directo (${liveScoreText(r.state)})`, 'ok', 4000);
+    } catch (err) {
+      if (err.status === 409 && err.data?.by) conflict = { ...err.data, m };
+      else {
+        game = linkedGame(m);
+        toast(`${err.message} El marcador no se emitirá en directo.`, 'error', 5000);
+      }
+    } finally {
+      starting = false;
+    }
+  }
+
+  /** Empieza (o vuelve) a emitir un partido que ya se está llevando en este móvil. */
+  async function resumeLive(takeover = false) {
+    const id = game?.match?.live_id;
+    if (!id) return;
+    try {
+      await claimLive(id, takeover);
+      conflict = null;
+      game = { ...game, live: { id } };
+      toast('Emitiendo en directo', 'ok');
+    } catch (err) {
+      if (err.status === 409 && err.data?.by) conflict = { ...err.data, local: true };
+      else toast(err.message, 'error', 5000);
+    }
+  }
+
+  function takeOver() {
+    if (conflict.local) resumeLive(true);
+    else goLive(conflict.m, true);
+  }
+
+  function withoutLive() {
+    if (!conflict.local) game = linkedGame(conflict.m);
+    conflict = null;
+  }
+
+  const conflictId = $derived(conflict ? (conflict.m?.live_id ?? game?.match?.live_id) : null);
+
+  // Un emisor mientras el partido esté «en directo» (se recrea al volver a esta pantalla)
+  let emitter = null;
+  const liveId = $derived(game?.live && !game.live.off ? game.live.id : null);
+  $effect(() => {
+    if (!liveId) return;
+    const e = createEmitter(liveId, (info) => {
+      if (info.status === 'lost' && liveInfo?.status !== 'lost') toast(`Has dejado de emitir: ${info.by || 'otra persona'} ha tomado el relevo`, 'error', 6000);
+      if (info.status === 'revoked') refreshScorer();
+      liveInfo = info;
+    });
+    emitter = e;
+    return () => {
+      e.dispose();
+      if (emitter === e) emitter = null;
+      liveInfo = null;
+    };
+  });
+  // Cada cambio del marcador (puntos, deshacer, correcciones, fin de set...) se emite entero
+  $effect(() => {
+    if (liveId && game) emitter?.send(toLive(game));
+  });
+
+  const onAir = $derived(!!liveId && liveInfo && !['lost', 'revoked', 'stopped'].includes(liveInfo.status));
+  const liveLabel = $derived.by(() => {
+    if (!liveId || !liveInfo) return '';
+    if (liveInfo.status === 'ok') return `🔴 Directo · 👀 ${liveInfo.viewers}`;
+    if (liveInfo.status === 'connecting') return 'Conectando…';
+    if (liveInfo.status === 'retrying') return 'Sin conexión · reintentando';
+    if (liveInfo.status === 'lost') return `Emite ${liveInfo.by || 'otra persona'}`;
+    if (liveInfo.status === 'revoked') return 'Código revocado';
+    return '';
+  });
+
+  async function stopLive() {
+    await emitter?.stop();
+    game = { ...game, live: { ...game.live, off: true } };
+    closeMenu();
+    toast('Has dejado de emitir. El marcador sigue en este móvil.', 'ok');
+  }
+
+  function shareLive() {
+    const title = `🔴 Sigue en directo: ${shortTeam(game.home.name)} vs ${shortTeam(game.away.name)}`;
+    shareText(game.match?.category ? `${title}\n${game.match.category} · ${game.match.round_name}` : title, `${location.origin}/#/directo/${liveId}`);
+  }
 
   // --- jugar ------------------------------------------------------------------
   // Ancares abajo por defecto (más a mano); "Cambiar lados" lo invierte
@@ -136,21 +255,7 @@
 
   // La pantalla no se apaga mientras se lleva el marcador
   $effect(() => {
-    if (step !== 'play' || !('wakeLock' in navigator)) return;
-    let lock = null;
-    const acquire = async () => {
-      try {
-        if (document.visibilityState === 'visible') lock = await navigator.wakeLock.request('screen');
-      } catch {
-        /* el navegador puede denegarlo: no es grave */
-      }
-    };
-    acquire();
-    document.addEventListener('visibilitychange', acquire);
-    return () => {
-      document.removeEventListener('visibilitychange', acquire);
-      lock?.release?.();
-    };
+    if (step === 'play') return keepScreenOn();
   });
 
   // --- resumen ------------------------------------------------------------------
@@ -164,14 +269,16 @@
   const target = $derived(candidates.find((c) => c.id === assign) || null);
   let confirmNew = $state(false);
 
-  // Partidos para asignar: primero los más cercanos a cuando empezó el marcador
+  // Partidos para asignar: primero los más cercanos a cuando empezó el marcador (los sin fecha, al final)
   const assignable = $derived.by(() => {
     if (!game) return [];
     const t = game.startedAt;
-    return [...candidates].sort(
-      (a, b) => Math.abs(new Date(a.starts_at) - t) - Math.abs(new Date(b.starts_at) - t),
-    );
+    const dist = (c) => (c.starts_at ? Math.abs(new Date(c.starts_at) - t) : Infinity);
+    return candidates
+      .filter((c) => showAll || c.in_window !== false || sameMatch(c, game.match))
+      .sort((a, b) => dist(a) - dist(b));
   });
+  const hiddenAssignable = $derived(game ? others.filter((c) => !sameMatch(c, game.match)).length : 0);
 
   $effect(() => {
     if (step !== 'summary' || assign !== null || loadingCandidates) return;
@@ -181,8 +288,8 @@
       assign = 'none';
       return;
     }
-    const same = assignable.find((c) => c.category_id === g.category_id && c.round_no === g.round_no && c.home === g.home && c.away === g.away);
-    const near = assignable.find((c) => Math.abs(new Date(c.starts_at) - game.startedAt) <= 6 * 3600e3);
+    const same = assignable.find((c) => sameMatch(c, g));
+    const near = assignable.find((c) => c.starts_at && Math.abs(new Date(c.starts_at) - game.startedAt) <= 6 * 3600e3);
     assign = (same || near)?.id ?? 'none';
   });
 
@@ -242,6 +349,7 @@
       confirmNew = true;
       return;
     }
+    emitter?.stop();
     game = null;
     assign = null;
     published = null;
@@ -255,52 +363,67 @@
       <h1>Marcador</h1>
       {#if $scorer.can_publish}<span class="chip brand"><Icon name="key" size={14} /> {$scorer.name}</span>{/if}
     </header>
-    <p class="muted intro">Lleva el tanteo con un toque por punto. Al terminar puedes compartirlo y, con código de anotador, publicarlo como resultado provisional.</p>
+    <p class="muted intro">Lleva el tanteo con un toque por punto. Con código de anotador se emite en directo para las familias y, al terminar, puedes publicarlo como resultado provisional.</p>
 
     <h2 class="section-title">¿Qué partido?</h2>
     {#if loadingCandidates}
       <div class="skeleton" style="height:76px"></div>
     {/if}
+    {#snippet option(m)}
+      <button class="option card" class:on={selected === m.id} onclick={() => choose(m)}>
+        <TeamBadge name={rivalOf(m)} logo={rivalLogo(m)} size={40} />
+        <span class="info">
+          <b class="ellipsis">vs {shortTeam(rivalOf(m))}</b>
+          <span class="muted ellipsis">{m.category} · {m.round_name}{m.provisional ? ' · ya tiene resultado provisional' : ''}{m.live_by ? ` · 🔴 en directo (${m.live_by})` : ''}</span>
+        </span>
+        <span class="when" class:now={whenLabel(m) === 'Ahora'}>{whenLabel(m)}</span>
+      </button>
+    {/snippet}
     <div class="options">
-      {#each candidates as m (m.id)}
-        <button class="option card" class:on={selected === m.id} onclick={() => choose(m)}>
-          <TeamBadge name={rivalOf(m)} logo={rivalLogo(m)} size={40} />
-          <span class="info">
-            <b class="ellipsis">vs {shortTeam(rivalOf(m))}</b>
-            <span class="muted ellipsis">{m.category} · {m.round_name}{m.provisional ? ' · ya tiene resultado provisional' : ''}</span>
-          </span>
-          <span class="when" class:now={whenLabel(m) === 'Ahora'}>{whenLabel(m)}</span>
-        </button>
-      {/each}
+      {#each nearby as m (m.id)}{@render option(m)}{/each}
       <button class="option card" class:on={selected === 'free'} onclick={() => choose('free')}>
         <span class="free-icon"><Icon name="ball" size={22} /></span>
         <span class="info"><b>Partido libre</b><span class="muted">Amistoso o entrenamiento</span></span>
       </button>
     </div>
-    {#if !loadingCandidates && !candidates.length}
-      <p class="muted small">No hay partidos de Ancares en estos días. Puedes llevar un partido libre.</p>
-    {/if}
-
     {#if selected === 'free'}
       <div class="free card" in:fly={{ y: 8 }}>
         <label class="field"><span>Local</span><input class="input" bind:value={freeHome} maxlength="60" /></label>
         <label class="field"><span>Visitante</span><input class="input" bind:value={freeAway} placeholder="Rival" maxlength="60" /></label>
       </div>
     {/if}
+    {#if !loadingCandidates && !nearby.length}
+      <p class="muted small">No hay partidos de Ancares en estos días. Puedes llevar un partido libre.</p>
+    {/if}
+    {#if others.length}
+      <button class="btn ghost more" onclick={() => (showAll = !showAll)} aria-expanded={showAll}>
+        <Icon name="calendar" size={18} /> {showAll ? 'Ocultar otros partidos' : `Otro día u otra hora (${others.length})`}
+      </button>
+      {#if showAll}
+        <p class="muted small">Solo admin: partidos sin resultado de otras fechas, por si se juegan en un día u hora distintos de los del calendario.</p>
+        <div class="options" in:fly={{ y: 8 }}>
+          {#each others as m (m.id)}{@render option(m)}{/each}
+        </div>
+      {/if}
+    {/if}
+
 
     <h2 class="section-title">Formato</h2>
     <FormatPicker bind:value={format} />
 
-    <button class="btn primary start" onclick={start} disabled={!selected}>
-      <Icon name="score" size={20} /> Empezar
+    <button class="btn primary start" onclick={start} disabled={!selected || starting}>
+      <Icon name="score" size={20} /> {starting ? 'Conectando…' : 'Empezar'}
     </button>
+    {#if $scorer.can_publish && selected !== 'free'}
+      <p class="muted small center">🔴 Se emitirá en directo: cualquiera podrá seguirlo desde la app.</p>
+    {/if}
   </div>
 {:else if step === 'play'}
   <div class="play">
     <header class="bar">
       <button class="icon-btn" onclick={() => go('/')} aria-label="Salir (el partido se guarda)"><Icon name="back" size={22} /></button>
       <div class="status">
-        <b>Set {setNo}</b>
+        <b>Set {setNo}{#if liveLabel}<em class="onair" class:on={onAir}>{liveLabel}</em>{/if}</b>
         <span>{teamName('home')} {won.home} – {won.away} {teamName('away')}</span>
       </div>
       <button class="icon-btn" onclick={() => (menuOpen = true)} aria-label="Opciones"><Icon name="more" size={22} /></button>
@@ -369,13 +492,19 @@
     <button class="btn" onclick={() => { game = { ...game, swapped: !game.swapped }; closeMenu(); }}>
       <Icon name="swap" size={18} /> Cambiar lados
     </button>
+    {#if onAir}
+      <button class="btn" onclick={shareLive}><Icon name="share" size={18} /> Compartir el directo</button>
+      <button class="btn" onclick={stopLive}><Icon name="x" size={18} /> Dejar de emitir</button>
+    {:else if game.match?.live_id && $scorer.can_publish}
+      <button class="btn" onclick={() => { closeMenu(); resumeLive(); }}><Icon name="send" size={18} /> Emitir en directo</button>
+    {/if}
     {#if confirmFinish}
       <button class="btn primary" onclick={() => { game = S.finish(game); closeMenu(); }}>Sí, terminar ahora</button>
     {:else}
       <button class="btn" onclick={() => (confirmFinish = true)}><Icon name="flag" size={18} /> Terminar partido ahora</button>
     {/if}
     {#if confirmDiscard}
-      <button class="btn danger" onclick={() => { game = null; closeMenu(); }}>Sí, descartar el partido</button>
+      <button class="btn danger" onclick={() => { emitter?.stop(); game = null; closeMenu(); }}>Sí, descartar el partido</button>
     {:else}
       <button class="btn ghost danger-text" onclick={() => (confirmDiscard = true)}><Icon name="trash" size={18} /> Descartar partido</button>
     {/if}
@@ -422,6 +551,11 @@
           <span class="info"><b>No es de liga</b><span class="muted">Solo compartir</span></span>
         </button>
       </div>
+      {#if hiddenAssignable && !showAll}
+        <button class="btn ghost more" onclick={() => (showAll = true)}>
+          <Icon name="calendar" size={18} /> Otro partido de otra fecha ({hiddenAssignable})
+        </button>
+      {/if}
     {/if}
 
     {#if assign !== 'none' && assign !== null}
@@ -465,6 +599,30 @@
   </div>
 {/if}
 
+<!-- Otra persona ya retransmite este partido -->
+<BottomSheet open={!!conflict} onClose={() => (conflict = null)}>
+  {#if conflict}
+    <h3 class="sheet-title">{conflict.by} ya está retransmitiendo este partido</h3>
+    {#if conflict.state?.sets}<p class="live-score">{liveScoreText(conflict.state)}</p>{/if}
+    <p class="muted center">
+      {#if conflict.stale}
+        No da señal desde hace más de 10 minutos. Puedes tomar el relevo y seguir desde donde lo dejó.
+      {:else if conflict.can_takeover}
+        Como admin, puedes tomar el relevo y seguir desde donde va.
+      {:else}
+        Solo emite una persona por partido. Puedes verlo en directo o llevar tu marcador sin emitir.
+      {/if}
+    </p>
+    {#if conflict.can_takeover}
+      <button class="btn primary" onclick={takeOver}><Icon name="send" size={18} /> Tomar el relevo</button>
+    {/if}
+    <button class="btn" class:primary={!conflict.can_takeover} onclick={() => { conflict = null; go(`/directo/${conflictId}`); }}>
+      Verlo en directo
+    </button>
+    <button class="btn ghost" onclick={withoutLive}>{conflict.local ? 'Seguir sin emitir' : 'Llevar mi marcador sin emitir'}</button>
+  {/if}
+</BottomSheet>
+
 <style>
   .title {
     display: flex;
@@ -507,6 +665,10 @@
   .option.on {
     border-color: var(--brand);
     background: var(--brand-soft);
+  }
+  .more {
+    width: 100%;
+    margin-top: 8px;
   }
   .info {
     flex: 1;
@@ -600,6 +762,27 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #8ee39c;
+  }
+  .onair {
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-style: normal;
+    letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffcf6e;
+  }
+  .onair.on {
+    background: #fff;
+    color: #d92d33;
+  }
+  .live-score {
+    margin: 0;
+    text-align: center;
+    font-size: 30px;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+    color: var(--brand);
   }
   .status span {
     font-size: 15px;

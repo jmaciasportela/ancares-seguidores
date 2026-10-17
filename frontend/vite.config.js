@@ -61,11 +61,12 @@ export default defineConfig({
       },
     }),
   ],
+  // ws: true para el marcador en directo (/api/live/.../ws)
   server: {
-    proxy: { '/api': 'http://127.0.0.1:8000' },
+    proxy: { '/api': { target: 'http://127.0.0.1:8000', ws: true } },
   },
   preview: {
-    proxy: { '/api': 'http://127.0.0.1:8000' },
+    proxy: { '/api': { target: 'http://127.0.0.1:8000', ws: true } },
   },
   build: {
     target: 'es2020',

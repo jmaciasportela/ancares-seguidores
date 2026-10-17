@@ -2,10 +2,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-from .models import Category, Match, ProvisionalResult, Standing
+from .models import Category, LiveScore, Match, ProvisionalResult, Standing
 from .parsers.common import norm
 from .scoring_format import format_of
 from .services.cheers import summary as cheer_summary
+from .services.live import live_id, summary as live_summary
 from .services.provisional import Key, match_key
 
 Logos = Dict[str, str]  # nombre normalizado -> URL del logo
@@ -13,11 +14,12 @@ Logos = Dict[str, str]  # nombre normalizado -> URL del logo
 
 @dataclass
 class Ctx:
-    """Datos auxiliares para serializar: logos y resultados provisionales."""
+    """Datos auxiliares para serializar: logos, resultados provisionales, ánimos y directos."""
 
     logos: Logos = field(default_factory=dict)
     provisional: Dict[Key, ProvisionalResult] = field(default_factory=dict)
     cheers: Dict[Key, Dict[str, int]] = field(default_factory=dict)
+    live: Dict[Key, LiveScore] = field(default_factory=dict)
 
     def logo(self, name: Optional[str]) -> Optional[str]:
         return self.logos.get(norm(name)) if name else None
@@ -77,6 +79,8 @@ def provisional_out(p: ProvisionalResult) -> dict:
 
 def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
     prov = ctx.provisional_for(m)
+    ours = m.is_ours and not m.is_bye
+    key = match_key(m)
     return {
         "id": m.id,
         "category_id": m.category_id,
@@ -96,28 +100,46 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
         "is_ours": m.is_ours,
         "provisional": provisional_out(prov) if prov else None,
         "tournament": bool(m.category and m.category.is_tournament),
-        "cheers": cheer_summary(ctx.cheers.get(match_key(m), {}), m) if m.is_ours and not m.is_bye else None,
+        "cheers": cheer_summary(ctx.cheers.get(key, {}), m) if ours else None,
+        # Marcador en directo: id para el visor y resumen si alguien lo está retransmitiendo
+        "live_id": live_id(m) if ours else None,
+        "live": live_summary(ctx.live.get(key)) if ours and m.home_sets is None else None,
     }
 
 
 def upcoming(matches: List[Match], ctx: Ctx = EMPTY, limit: int = 2, now: Optional[datetime] = None) -> List[Match]:
     """Próximos partidos de Ancares sin jugar (incluye el que se está jugando ahora).
 
-    Primero los que tienen fecha, por orden; después los que aún no la tienen,
-    por jornada. Un partido con resultado provisional ya se ha jugado.
+    Los que tienen fecha van por orden de fecha. Los que aún no la tienen (la
+    federación no la ha fijado) se colocan por jornada entre ellos: uno sin fecha
+    de la jornada 2 va antes que otro con fecha de la jornada 11. Un partido con
+    resultado (oficial o provisional) o cuya fecha ya pasó se da por jugado, y los
+    sin fecha de jornadas ya superadas se descartan. Lo que se está retransmitiendo
+    en directo va siempre primero, aunque el Excel diga otro día.
     """
     now = now or datetime.now(timezone.utc)
-    pending = [m for m in matches if m.is_ours and not m.is_bye and m.home_sets is None and not ctx.provisional_for(m)]
-    dated = sorted(
-        (m for m in pending if m.starts_at and _aware(m.starts_at) >= now - timedelta(hours=3)),
-        key=lambda m: _aware(m.starts_at),
-    )
-    last = last_result(matches, ctx)
-    undated = sorted(
-        (m for m in pending if not m.starts_at and (last is None or m.round_no > last.round_no)),
-        key=lambda m: (m.round_no, m.order),
-    )
-    return (dated + undated)[:limit]
+    recent = now - timedelta(hours=3)
+    ours = [m for m in matches if m.is_ours and not m.is_bye]
+
+    def on_air(m: Match) -> bool:
+        s = live_summary(ctx.live.get(match_key(m)), now) if m.home_sets is None and not ctx.provisional_for(m) else None
+        return bool(s and s["on"])
+
+    def played(m: Match) -> bool:
+        return m.home_sets is not None or ctx.provisional_for(m) is not None or bool(m.starts_at and _aware(m.starts_at) < recent)
+
+    live_now = [m for m in ours if on_air(m)]
+    ours = [m for m in ours if m not in live_now]
+    played_round = max((m.round_no for m in ours if played(m)), default=0)
+    pending = [m for m in ours if not played(m)]
+    dated = sorted((m for m in pending if m.starts_at), key=lambda m: _aware(m.starts_at))
+    undated = sorted((m for m in pending if not m.starts_at and m.round_no > played_round), key=lambda m: (m.round_no, m.order))
+    out: List[Match] = list(live_now)
+    for d in dated:
+        while undated and undated[0].round_no < d.round_no:
+            out.append(undated.pop(0))
+        out.append(d)
+    return (out + undated)[:limit]
 
 
 def next_match(matches: List[Match], ctx: Ctx = EMPTY, now: Optional[datetime] = None) -> Optional[Match]:

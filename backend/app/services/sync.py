@@ -14,7 +14,7 @@ from ..models import Category, SyncLog, utcnow
 from .fetcher import fetch_xls, make_client
 from .importer import import_file
 from .logos_fvcl import search_category_logos
-from . import usage
+from . import live, usage
 from .mailer import send_admin_email
 
 log = logging.getLogger(__name__)
@@ -82,6 +82,7 @@ def daily_job() -> None:
         gone = usage.purge_old(session)  # privacidad: fuera los datos de uso de más de 180 días
         if gone:
             log.info("Uso: %s dispositivos inactivos borrados", gone)
+        live.purge_old(session)  # marcadores en directo de hace más de 2 días
     report = sync_categories(source="auto", pause=True)
     failed = [r for r in report if r["status"] in ("blocked", "error")]
     if failed and _last_blocked_email != date.today():

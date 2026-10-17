@@ -221,6 +221,31 @@ class Cheer(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+
+class LiveScore(Base):
+    """Marcador en directo de un partido: lo emite el anotador principal y lo ve cualquiera.
+
+    Misma clave natural que los provisionales (los partidos se recrean al importar).
+    `live_id` es corto y estable para la URL del visor (#/directo/{live_id}).
+    """
+
+    __tablename__ = "live_scores"
+    __table_args__ = (UniqueConstraint("category_id", "round_no", "home_key", "away_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    live_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    home_key: Mapped[str] = mapped_column(String(200))
+    away_key: Mapped[str] = mapped_column(String(200))
+    scorer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scorers.id", ondelete="SET NULL"))  # None = admin
+    lead_name: Mapped[str] = mapped_column(String(100))
+    state: Mapped[Optional[dict]] = mapped_column(JSON)  # {format, sets:[[h,a,done]], serve, status, finished_early}
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # último contacto del principal
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
 def competition_order():
     """Ligas siempre antes que torneos; dentro de cada grupo, el orden del admin."""
     return (case((Category.kind == "tournament", 1), else_=0), Category.sort_order, Category.name)

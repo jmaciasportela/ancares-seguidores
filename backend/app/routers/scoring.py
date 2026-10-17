@@ -16,6 +16,7 @@ from ..schemas import ProvisionalIn, ScorerJoinIn
 from ..scoring_format import ResultError, format_of, validate_partials
 from ..serializers import Ctx, _aware, match_out, provisional_out
 from ..services.logos import logo_map
+from ..services.live import is_lead, is_stale, live_map
 from ..services.provisional import prov_key, provisional_map
 
 router = APIRouter(prefix="/api", tags=["scoring"])
@@ -88,34 +89,48 @@ def taken_by_other(prov: Optional[ProvisionalResult], who: Publisher) -> bool:
 
 @router.get("/scoring/matches")
 def scoring_matches(request: Request, session: Session = Depends(get_session)):
-    """Partidos de Ancares sin resultado oficial en ±2 días, del más cercano a ahora al más lejano."""
+    """Partidos de Ancares sin resultado oficial en ±2 días, del más cercano a ahora al más lejano.
+
+    El admin ve además todos los demás sin resultado (también los que no tienen
+    fecha), porque a veces se juegan en otro día u hora que la del Excel.
+    Van detrás, marcados con `in_window: false`.
+    """
     now = datetime.now(timezone.utc)
     me = current_scorer(request, session)
-    who = Publisher(None, "Admin") if is_admin(request) else Publisher(me, me.name if me else "")
+    admin = is_admin(request)
+    who = Publisher(None, "Admin") if admin else Publisher(me, me.name if me else "")
     cats = session.scalars(
         select(Category).where(Category.active.is_(True)).options(selectinload(Category.matches))
     ).all()
-    ctx = Ctx(logos=logo_map(session), provisional=provisional_map(session))
+    ctx = Ctx(logos=logo_map(session), provisional=provisional_map(session), live=live_map(session))
     items = []
     for cat in cats:
         for m in cat.matches:
-            if not m.is_ours or m.is_bye or m.home_sets is not None or not m.away or not m.starts_at:
+            if not m.is_ours or m.is_bye or m.home_sets is not None or not m.away:
                 continue
-            delta = _aware(m.starts_at) - now
-            if abs(delta) > WINDOW:
+            delta = _aware(m.starts_at) - now if m.starts_at else None
+            in_window = delta is not None and abs(delta) <= WINDOW
+            if not in_window and not admin:
                 continue
             item = match_out(m, ctx)
             prov = ctx.provisional_for(m)
+            row = ctx.live.get(prov_key(m.category_id, m.round_no, m.home, m.away))
+            # ¿Lo está retransmitiendo otra persona ahora mismo?
+            busy = row is not None and row.ended_at is None and not is_stale(row, now)
+            mine = row is not None and is_lead(row, who.scorer.id if who.scorer else None, admin)
             item.update(
+                live_by=row.lead_name if busy and not mine else None,
                 category=cat.name,
                 category_slug=cat.slug,
                 score_format=format_of(cat.score_format),
-                minutes_from_now=round(delta.total_seconds() / 60),
+                minutes_from_now=round(delta.total_seconds() / 60) if delta is not None else None,
+                in_window=in_window,
                 # ¿Puede quien pregunta publicar (o corregir) este partido?
-                can_publish=(who.scorer is not None or is_admin(request)) and not taken_by_other(prov, who),
+                can_publish=(who.scorer is not None or admin) and not taken_by_other(prov, who),
             )
             items.append(item)
-    items.sort(key=lambda i: abs(i["minutes_from_now"]))
+    # Primero los de estos días; luego (solo admin) el resto, del más cercano al más lejano y los sin fecha al final
+    items.sort(key=lambda i: (not i["in_window"], i["minutes_from_now"] is None, abs(i["minutes_from_now"] or 0), i["round_no"]))
     return items
 
 

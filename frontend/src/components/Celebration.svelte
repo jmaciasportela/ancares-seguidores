@@ -36,7 +36,7 @@
     }
     return out;
   });
-  const blocked = $derived(['admin', 'marcador'].includes($route.parts[0]));
+  const blocked = $derived(['admin', 'marcador', 'directo'].includes($route.parts[0]));
   let dismissed = $state([]);
   const current = $derived(blocked ? null : pending.find((p) => !dismissed.includes(p.key)) || null);
 

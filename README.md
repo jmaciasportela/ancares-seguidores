@@ -57,9 +57,12 @@ Una versión nueva cambia el service worker, y los móviles que tienen la app in
    - **Domain Names:** tu dominio.
    - **Scheme / Forward Hostname / Port:** `http` · `ancares-app` · `8000`.
    - **Block Common Exploits:** activado.
+   - **Websockets Support:** activado (para el marcador en directo; sin él funciona igual, pero las familias ven el tanteo con unos segundos de retraso).
    - **Pestaña SSL:** *Request a new SSL Certificate* con *Force SSL* y *HTTP/2*.
 
 La app no publica ningún puerto en el VPS: solo es accesible a través de Nginx Proxy Manager. El HTTPS es obligatorio para que la PWA se pueda instalar.
+
+La app debe correr en **un solo proceso** de uvicorn (como en el `Dockerfile`): los visores del marcador en directo se reparten en memoria.
 
 La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad basta con copiar ese fichero.
 
@@ -167,6 +170,8 @@ La pestaña **Marcador** permite llevar el tanteo de un partido con un toque por
 - **Formatos:** al mejor de 3 o de 5, o un número fijo de sets.
 - **Formato por categoría:** el admin lo fija al editar la categoría y se puede cambiar antes de empezar el partido.
 
+**Partidos fuera de fecha:** el marcador propone los partidos de ±2 días. Como a veces se juegan otro día u otra hora que la del Excel, el admin ve además «Otro día u otra hora» con el resto de partidos sin resultado (también los que aún no tienen fecha) y puede anotarlos y emitirlos en directo.
+
 El partido en curso se guarda en el móvil, así que no se pierde si se cierra la app. Se puede deshacer, corregir el marcador, cambiar los lados y terminar en cualquier momento. Al acabar, la app propone el partido de liga más cercano por día y hora.
 
 **Quién puede publicar:**
@@ -174,6 +179,16 @@ El partido en curso se guarda en el móvil, así que no se pierde si se cierra l
 - **Anotadores:** publican el resultado en la app como **provisional**. El admin les crea un código en la pestaña *Anotadores* (se muestra una sola vez) y ellos lo introducen en la app, en *Club → Funciones extra*. Revocar un anotador lo desactiva al momento en todos sus móviles. El admin también puede publicar.
 - **Qué se publica:** el resultado aparece con la etiqueta «Provisional · pendiente de confirmar por la federación», no cuenta para la clasificación y desaparece en cuanto la FVCL publica el oficial. Desde el admin se pueden ver y borrar.
 - **Manda el primero:** si dos anotadores publican el mismo partido, se queda el primero. Solo quien lo publicó puede corregirlo, y el admin siempre puede sustituirlo o borrarlo. Si alguien lo intenta, el marcador le dice quién lo publicó.
+
+## Marcador en directo
+
+Cuando un anotador (o el admin) empieza a llevar un partido de liga, se **emite en directo**: cada punto llega al momento a quien lo esté viendo.
+- **Una sola persona emite:** el *anotador principal*, que es el primero que empieza. Si otro anotador intenta llevar el mismo partido, la app le dice quién lo está retransmitiendo y le deja verlo en directo o llevar su marcador sin emitir.
+- **Relevo:** si el principal deja de dar señal 10 minutos (sin batería, sin cobertura...), otro anotador puede **tomar el relevo** y sigue desde el tanteo emitido. El admin puede hacerlo siempre. Desde el menú del marcador se puede *Dejar de emitir* o *Compartir el directo*.
+- **Para las familias:** en las tarjetas de los partidos de hoy aparece **Ver en directo**. El visor (`#/directo/{id}`, se puede compartir por WhatsApp) muestra los puntos con un destello en cada tanto, los avisos de punto de set, fin de set, cambio de campo y final, cuánta gente lo está viendo y los ánimos. Si aún no ha empezado, espera y se pone en marcha solo.
+- **Portada y calendario:** mientras se emite, la tarjeta muestra el tanteo con «EN DIRECTO» y el calendario una pastilla que lleva al visor.
+- **Cómo funciona:** el anotador manda el estado completo del marcador en cada cambio (un reintento con mala cobertura no descuadra nada) y un latido cada minuto. Los visores lo reciben por WebSocket; si no conecta, consultan cada 5 s. El estado se guarda en la base de datos, así que un reinicio no lo pierde, y se borra a los 2 días.
+- **Resultado:** el directo no cuenta como resultado. Al terminar, el anotador publica el resultado provisional como siempre.
 
 ## Particularidades de los Excel de la FVCL (Clupik)
 

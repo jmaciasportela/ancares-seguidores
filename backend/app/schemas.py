@@ -1,6 +1,6 @@
-from typing import List, Literal, Optional, Union
+from typing import Annotated, List, Literal, Optional, Tuple, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .scoring_format import ScoreFormat
 
@@ -119,3 +119,33 @@ class CheerIn(BaseModel):
     kind: str = Field(max_length=20)
     n: int = Field(default=1, ge=1, le=1000)
     device: str = Field(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+# --- marcador en directo ------------------------------------------------------------
+
+Points = Annotated[int, Field(ge=0, le=99)]
+
+
+class LiveStateIn(BaseModel):
+    """Estado del marcador que emite el anotador principal (siempre completo)."""
+
+    format: ScoreFormat
+    sets: List[Tuple[Points, Points, bool]] = Field(min_length=1, max_length=7)  # [local, visitante, terminado]
+    serve: Optional[Literal["home", "away"]] = None
+    status: Literal["playing", "set_over", "match_over", "finished"]
+    finished_early: bool = False
+
+    @model_validator(mode="after")
+    def _sets_fit_format(self):
+        if len(self.sets) > self.format.sets:
+            raise ValueError(f"Hay {len(self.sets)} sets y el formato solo tiene {self.format.sets}")
+        return self
+
+
+class LiveIn(BaseModel):
+    seq: int = Field(ge=0, le=10**9)
+    state: LiveStateIn
+
+
+class LiveClaimIn(BaseModel):
+    takeover: bool = False

@@ -1,7 +1,8 @@
 <script>
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
-  import { formatWhen, isOursName, mapsUrl, ourOutcome, partialsText, scoreOf, shortTeam } from '../lib/format.js';
+  import { formatWhen, isOursName, liveMode, liveText, mapsUrl, ourOutcome, partialsText, scoreOf, shortTeam } from '../lib/format.js';
+  import { go } from '../lib/router.js';
   import { matchText } from '../lib/share.js';
   import { openShare } from '../lib/shareSheet.js';
   import { dataFromMatch } from '../lib/shareData.js';
@@ -11,6 +12,7 @@
   const score = $derived(scoreOf(match));
   const homeWon = $derived(score && score.home > score.away);
   const awayWon = $derived(score && score.away > score.home);
+  const live = $derived(score ? null : liveMode(match.live));
 </script>
 
 {#if match.is_bye}
@@ -54,6 +56,11 @@
           <span class="prov-note">Pendiente de confirmar por {match.tournament ? 'la organización' : 'la federación'}{score.early ? ' · terminado antes de tiempo' : ''}</span>
         {/if}
       {:else}
+        {#if live}
+          <button class="pill live" class:on={live === 'live'} onclick={() => go(`/directo/${match.live.id}`)}>
+            <i aria-hidden="true"></i> {live === 'live' ? 'En directo' : 'Final'} · {liveText(match.live)}
+          </button>
+        {/if}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>
         {#if match.venue}
           <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
@@ -204,6 +211,38 @@
   @media (prefers-color-scheme: dark) {
     .pill.prov {
       color: #f5b94a;
+    }
+  }
+  .pill.live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--brand-soft);
+    color: var(--brand-strong);
+    font-variant-numeric: tabular-nums;
+  }
+  .pill.live i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .pill.live.on {
+    background: rgba(229, 72, 77, 0.12);
+    color: var(--danger);
+  }
+  .pill.live.on i {
+    animation: blink 1s infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pill.live.on i {
+      animation: none;
     }
   }
   .prov-note {

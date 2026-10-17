@@ -1,18 +1,23 @@
 <script>
   import { onMount } from 'svelte';
-  import { matchState } from '../lib/format.js';
+  import { liveMode, matchState } from '../lib/format.js';
 
-  /** Etiqueta «HOY» / «EN JUEGO» para las tarjetas de los partidos del día */
-  let { startsAt } = $props();
+  /** Etiqueta «HOY» / «EN JUEGO» para las tarjetas de los partidos del día (o «EN DIRECTO» / «FINAL» si se retransmite) */
+  let { startsAt, live = null } = $props();
   let now = $state(Date.now());
   onMount(() => {
     const t = setInterval(() => (now = Date.now()), 30000);
     return () => clearInterval(t);
   });
   const state = $derived(matchState(startsAt, now));
+  const mode = $derived(liveMode(live));
 </script>
 
-{#if state === 'live'}
+{#if mode === 'live'}
+  <span class="badge live"><i></i> EN DIRECTO</span>
+{:else if mode === 'final'}
+  <span class="badge">FINAL</span>
+{:else if state === 'live'}
   <span class="badge live"><i></i> EN JUEGO</span>
 {:else}
   <span class="badge"><span class="ball" aria-hidden="true">🏐</span> HOY</span>
