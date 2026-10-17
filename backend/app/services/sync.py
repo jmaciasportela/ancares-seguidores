@@ -39,8 +39,17 @@ def sync_categories(category_ids: Optional[List[int]] = None, source: str = "aut
             for kind, url in (("ranking", cat.ranking_url), ("calendar", cat.calendar_url)):
                 if not url:
                     continue
-                fetched = fetch_xls(url, client=client)
-                if fetched.ok:
+                validators = (cat.http_validators or {}).get(url)
+                fetched = fetch_xls(url, client=client, validators=validators)
+                if fetched.validators:
+                    # Se reasigna el dict para que SQLAlchemy detecte el cambio en el JSON
+                    cat.http_validators = {**(cat.http_validators or {}), url: fetched.validators}
+                if fetched.not_modified:
+                    cat.last_sync_at = utcnow()
+                    session.add(SyncLog(category_id=cat.id, kind=kind, source=source, status="unchanged", message=fetched.message))
+                    session.commit()
+                    report.append({"category": cat.name, "kind": kind, "status": "unchanged", "message": fetched.message, "url": url})
+                elif fetched.ok:
                     res = import_file(session, cat, fetched.data, source=source)
                     report.append({"category": cat.name, "kind": kind, "status": res.status, "message": res.message, "url": url})
                     if res.status == "error":

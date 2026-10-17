@@ -152,7 +152,8 @@ def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
         "last_result": match_out(lr, ctx) if lr else None,
         "score_format": format_of(c.score_format),
         "kind": c.kind or "league",
-        "updated_at": iso(c.data_updated_at),
+        "updated_at": iso(c.data_updated_at),  # último cambio real en los datos
+        "checked_at": iso(c.last_sync_at),  # última comprobación con la FVCL
     }
 
 

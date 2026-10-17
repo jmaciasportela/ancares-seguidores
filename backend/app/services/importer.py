@@ -1,8 +1,7 @@
 """Importa un Excel de la FVCL en la base de datos de forma atómica por categoría."""
-import hashlib
+from dataclasses import dataclass, field
 from datetime import timezone
-from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -12,6 +11,7 @@ from ..models import Category, Match, Standing, SyncLog, utcnow
 from ..parsers.calendar import parse_calendar, split_teams
 from ..parsers.common import ParseError, detect_kind, norm, read_rows
 from ..parsers.ranking import parse_ranking
+from .changes import content_hash, diff_calendar, diff_ranking, summary
 from .logos import ensure_teams
 from .provisional import drop_superseded
 
@@ -22,6 +22,7 @@ class ImportResult:
     status: str  # ok | unchanged | error
     message: str = ""
     count: int = 0
+    changes: List[str] = field(default_factory=list)
 
 
 def is_ours(team: Optional[str]) -> bool:
@@ -32,23 +33,41 @@ def sniff_kind(data: bytes) -> str:
     return detect_kind(read_rows(data))
 
 
-def import_file(
-    session: Session, category: Category, data: bytes, source: str, force: bool = False
-) -> ImportResult:
-    """Parsea y guarda el fichero. Si falla, no toca los datos existentes."""
+def import_file(session: Session, category: Category, data: bytes, source: str) -> ImportResult:
+    """Parsea, compara con lo que ya hay y solo guarda si los datos han cambiado.
+
+    Se comparan datos, no bytes: Clupik mete la hora de exportación en cada
+    Excel, así que dos descargas iguales nunca coinciden byte a byte.
+    """
     kind = "?"
     try:
         rows = read_rows(data)
         kind = detect_kind(rows)
-        digest = hashlib.sha256(data).hexdigest()
-        hash_attr = f"{kind}_hash"
-        if not force and getattr(category, hash_attr) == digest:
-            result = ImportResult(kind, "unchanged", "Sin cambios desde la última importación")
+        if kind == "ranking":
+            first_load = not category.standings
+            parsed = parse_ranking(rows)
+            found = diff_ranking(category.standings, parsed, is_ours)
         else:
-            count = _store_ranking(session, category, rows) if kind == "ranking" else _store_calendar(session, category, rows)
+            first_load = not category.matches
+            parsed = parse_calendar(rows, [s.team for s in category.standings])
+            found = diff_calendar(category.matches, parsed, is_ours)
+        # Siempre se comparan los datos (son pocos): así también se corrige cualquier
+        # desajuste con la FVCL. La huella de contenido queda solo como referencia.
+        digest = content_hash(kind, parsed)
+        hash_attr = f"{kind}_hash"
+        if not found:
+            # Mismos datos (aunque el fichero sea otro): no se toca nada
+            setattr(category, hash_attr, digest)
+            result = ImportResult(kind, "unchanged", "Sin cambios")
+        else:
+            if kind == "ranking":
+                count = _store_ranking(session, category, parsed)
+            else:
+                count = _store_calendar(session, category, parsed)
             setattr(category, hash_attr, digest)
             category.data_updated_at = utcnow()
-            result = ImportResult(kind, "ok", f"{count} filas importadas", count)
+            message = f"Primera carga: {count} {'equipos' if kind == 'ranking' else 'partidos'}" if first_load else summary(found)
+            result = ImportResult(kind, "ok", message, count, [] if first_load else [c.text for c in found][:60])
     except ParseError as exc:
         session.rollback()
         result = ImportResult(kind, "error", str(exc))
@@ -60,13 +79,13 @@ def import_file(
     else:
         category.sync_status = "ok" if source == "auto" else "manual"
         category.last_error = None
-    session.add(SyncLog(category_id=category.id, kind=kind, source=source, status=result.status, message=result.message))
+    session.add(SyncLog(category_id=category.id, kind=kind, source=source, status=result.status,
+                        message=result.message, details=result.changes or None))
     session.commit()
     return result
 
 
-def _store_ranking(session: Session, category: Category, rows) -> int:
-    parsed = parse_ranking(rows)
+def _store_ranking(session: Session, category: Category, parsed) -> int:
     session.execute(delete(Standing).where(Standing.category_id == category.id))
     for s in parsed:
         session.add(
@@ -100,9 +119,7 @@ def _store_ranking(session: Session, category: Category, rows) -> int:
     return len(parsed)
 
 
-def _store_calendar(session: Session, category: Category, rows) -> int:
-    known = [s.team for s in category.standings]
-    parsed = parse_calendar(rows, known)
+def _store_calendar(session: Session, category: Category, parsed) -> int:
     session.execute(delete(Match).where(Match.category_id == category.id))
     for m in parsed:
         session.add(

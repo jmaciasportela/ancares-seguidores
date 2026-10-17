@@ -52,8 +52,13 @@ def _active(session: Session):
 def home(request: Request, session: Session = Depends(get_session)):
     cats = _active(session)
     updated = max((c.data_updated_at for c in cats if c.data_updated_at), default=None)
+    checked = max((c.last_sync_at for c in cats if c.last_sync_at), default=None)
     ctx = make_ctx(session)
-    return cached_json(request, {"categories": [category_summary(c, ctx) for c in cats], "updated_at": iso(updated)})
+    return cached_json(request, {
+        "categories": [category_summary(c, ctx) for c in cats],
+        "updated_at": iso(updated),  # últimas novedades reales
+        "checked_at": iso(checked),  # última comprobación
+    })
 
 
 @router.get("/categories")

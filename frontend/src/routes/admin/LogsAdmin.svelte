@@ -6,6 +6,7 @@
 
   const KIND = { ranking: 'Clasificación', calendar: 'Calendario' };
   const SOURCE = { auto: 'automática', manual: 'subida', share: 'compartido' };
+  const STATUS = { ok: '🆕 Novedades', unchanged: 'Sin cambios', blocked: 'Bloqueado', error: 'Error' };
   let logs = $state([]);
   let loading = $state(true);
 
@@ -34,7 +35,15 @@
             <b class="ellipsis">{l.category || '—'} · {KIND[l.kind] || l.kind}</b>
             <span class="muted small">{timeAgo(l.created_at)}</span>
           </div>
-          <span class="muted small">{l.status} ({SOURCE[l.source] || l.source}){l.message ? ` — ${l.message}` : ''}</span>
+          <span class="small" class:muted={l.status !== 'ok'} class:news={l.status === 'ok'}>
+            {STATUS[l.status] || l.status} ({SOURCE[l.source] || l.source}){l.message && l.message !== 'Sin cambios' ? ` — ${l.message}` : ''}
+          </span>
+          {#if l.details?.length}
+            <details>
+              <summary class="muted small">Ver {l.details.length} {l.details.length === 1 ? 'cambio' : 'cambios'}</summary>
+              <ul>{#each l.details as d}<li>{d}</li>{/each}</ul>
+            </details>
+          {/if}
         </div>
       </div>
     {/each}
@@ -61,9 +70,11 @@
     margin-top: 6px;
     background: var(--muted);
   }
-  .dot.ok,
-  .dot.unchanged {
+  .dot.ok {
     background: var(--brand);
+  }
+  .dot.unchanged {
+    background: var(--line);
   }
   .dot.blocked {
     background: var(--warn);
@@ -81,6 +92,16 @@
     display: flex;
     justify-content: space-between;
     gap: 8px;
+  }
+  .news {
+    color: var(--brand-strong);
+    font-weight: 600;
+  }
+  details ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+    color: var(--muted);
   }
   .small {
     font-size: 12.5px;

@@ -36,7 +36,7 @@
     {#if $home.error && !$home.data}
       Sin conexión y sin datos guardados todavía.
     {:else if $home.data?.updated_at}
-      Datos de la federación · actualizados {timeAgo($home.data.updated_at)}
+      Novedades de la federación {timeAgo($home.data.updated_at)}{#if $home.data.checked_at}{' · '}comprobado {timeAgo($home.data.checked_at)}{/if}
     {:else if !$home.loading}
       Aún no hay datos cargados.
     {/if}

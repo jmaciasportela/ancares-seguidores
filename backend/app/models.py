@@ -28,6 +28,8 @@ class Category(Base):
     score_format: Mapped[Optional[dict]] = mapped_column(JSON)
     # "league": liga de la FVCL (Excel); "tournament": torneo que da de alta el admin a mano
     kind: Mapped[str] = mapped_column(String(20), default="league")
+    # Cabeceras ETag/Last-Modified de la FVCL por URL, para preguntar si ha cambiado
+    http_validators: Mapped[Optional[dict]] = mapped_column(JSON)
 
     @property
     def is_tournament(self) -> bool:
@@ -115,6 +117,7 @@ class SyncLog(Base):
     source: Mapped[str] = mapped_column(String(20))  # auto | manual | share
     status: Mapped[str] = mapped_column(String(20))  # ok | unchanged | blocked | error
     message: Mapped[Optional[str]] = mapped_column(Text)
+    details: Mapped[Optional[list]] = mapped_column(JSON)  # lista de cambios cuando hay novedades
 
 
 class Team(Base):

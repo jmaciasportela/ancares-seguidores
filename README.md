@@ -70,6 +70,11 @@ La base de datos queda en `./data/ancares.db`. Para tener una copia de seguridad
    - el *nombre FVCL*: lo que aparece en el nombre del Excel, por ejemplo `CRE Infantil Femenino Liga Oro`;
    - los dos enlaces `export-xls` de la federación (clasificación y calendario).
 2. **Sincronizar** descarga e importa los dos Excel al momento. Además se hace solo a las 12:00 y a las 16:00 (hora de Madrid), según `SYNC_CRON`.
+   - **Solo cuentan las novedades reales.** Clupik pone la hora de exportación dentro de cada Excel, así que dos descargas con los mismos datos nunca son iguales byte a byte. La app compara los **datos** partido a partido y equipo a equipo:
+     - Si nada ha cambiado, registra «Sin cambios» y no toca nada.
+     - Si hay cambios, los guarda y apunta qué cambió, por ejemplo «2 resultados nuevos · 1 cambio de horario o pabellón (Ancares – Colón: dom 18/10 10:30 → 12:00)». La lista completa se ve en *Registro*.
+   - **En la portada:** «Novedades de la federación hace X · comprobado hace Y».
+   - **Si la FVCL lo permite**, la app pregunta antes de descargar si el Excel ha cambiado (cabeceras `ETag`/`Last-Modified`, con respuesta `304`). Si no lo indica, el admin lo avisa y se compara el contenido.
 3. **Prueba de trabajo de fvcl.es.** A veces fvcl.es responde con un 429 y un reto de prueba de trabajo (SHA-256) en lugar del Excel. La app lo resuelve sola (`backend/app/services/pow.py`, basado en `scripts/descargar_pow.py`):
    - usa siempre su propio User-Agent;
    - hace un solo intento por sincronización;

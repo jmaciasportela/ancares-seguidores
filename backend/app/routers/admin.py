@@ -98,7 +98,17 @@ def list_categories(session: Session = Depends(get_session)):
         .order_by(*competition_order())
         .options(selectinload(Category.standings), selectinload(Category.matches))
     ).all()
-    return [category_admin(c) for c in cats]
+    # Último cambio real de cada categoría (las pasadas «Sin cambios» no cuentan)
+    last_change = {}
+    for log in session.scalars(select(SyncLog).where(SyncLog.status == "ok").order_by(SyncLog.id.desc())).all():
+        last_change.setdefault(log.category_id, {"message": log.message, "at": iso(log.created_at), "kind": log.kind})
+    out = []
+    for c in cats:
+        item = category_admin(c)
+        item["last_change"] = last_change.get(c.id)
+        item["fvcl_reports_changes"] = bool(c.http_validators)
+        out.append(item)
+    return out
 
 
 @protected.post("/categories", status_code=201)
@@ -183,7 +193,7 @@ async def upload(
             results.append({"filename": filename, "kind": kind, "status": "error", "category": cat.name,
                             "message": "Es un torneo: sus partidos se meten a mano, no con el Excel de la FVCL"})
             continue
-        res = import_file(session, cat, data, source=source, force=True)
+        res = import_file(session, cat, data, source=source)
         results.append({"filename": filename, "kind": kind, "status": res.status, "message": res.message,
                         "category": cat.name, "category_id": cat.id})
     return {"results": results}
@@ -203,7 +213,7 @@ def logs(limit: int = 50, session: Session = Depends(get_session)):
     names = {c.id: c.name for c in session.scalars(select(Category)).all()}
     return [
         {"id": r.id, "created_at": iso(r.created_at), "category": names.get(r.category_id), "kind": r.kind,
-         "source": r.source, "status": r.status, "message": r.message}
+         "source": r.source, "status": r.status, "message": r.message, "details": r.details or []}
         for r in rows
     ]
 

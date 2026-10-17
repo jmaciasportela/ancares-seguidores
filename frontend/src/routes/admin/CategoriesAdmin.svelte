@@ -176,8 +176,15 @@
         <div class="stats muted small">
           <span>{cat.teams} equipos</span>
           <span>{cat.matches} partidos</span>
-          <span>Datos {timeAgo(cat.updated_at)}</span>
+          <span>Último cambio {timeAgo(cat.updated_at)}</span>
+          <span>Comprobado {timeAgo(cat.last_sync_at)}</span>
         </div>
+        {#if cat.last_change}
+          <p class="change small">🆕 {cat.last_change.message}</p>
+        {/if}
+        {#if cat.ranking_url && cat.last_sync_at && !cat.fvcl_reports_changes}
+          <p class="muted small">La FVCL no indica si sus Excel han cambiado: se descargan y se compara su contenido.</p>
+        {/if}
         {#if cat.last_error}
           <p class="error small">{cat.last_error}</p>
         {/if}
@@ -294,6 +301,11 @@
     flex-wrap: wrap;
     gap: 4px 14px;
     margin: 10px 0 4px;
+  }
+  .change {
+    margin: 6px 0 0;
+    color: var(--brand-strong);
+    word-break: break-word;
   }
   .error {
     color: var(--danger);
