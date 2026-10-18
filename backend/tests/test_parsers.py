@@ -1,8 +1,9 @@
+from pathlib import Path
 from datetime import timedelta
 
 import pytest
 
-from app.parsers.calendar import parse_calendar, parse_packed, parse_score, parse_when, split_teams
+from app.parsers.calendar import packed_from_number, parse_calendar, parse_packed, parse_score, parse_when, split_teams
 from app.parsers.common import ParseError, detect_kind, read_rows
 from app.parsers.ranking import parse_ranking
 
@@ -105,4 +106,30 @@ def test_calendar_with_official_results():
     assert played == {
         ("CDF Voleibol Ancares UVa", "VCV Castilla"): (1, 3, [[14, 25], [11, 25], [25, 18], [12, 25]]),
         ("C.D. San José", "Maristas Inmaculada A"): (0, 3, [[10, 25], [15, 25], [20, 25]]),
+    }
+
+
+def test_packed_partials_stored_as_number():
+    """Si los parciales son solo cifras y gana el local, el Excel los guarda como número."""
+    # Real (Cadete, Sporting – Linecar): 30251725825120000 = 3-0 · 25-17, 25-8, 25-12
+    assert packed_from_number(3.025172582512e+16) == (3, 0, [[25, 17], [25, 8], [25, 12]])
+    # Con 20 cifras o más se pierden las últimas: queda el resultado en sets, sin parciales
+    assert packed_from_number(float(31252023252518252200)) == (3, 1, [])
+    assert packed_from_number(float(3225202325202525181513)) == (3, 2, [])
+    assert packed_from_number("3025") is None and packed_from_number(0.0) is None
+
+
+def test_cadete_calendar_with_numeric_partials():
+    from app.parsers.common import read_rows
+    from app.parsers.ranking import parse_ranking
+
+    samples = Path(__file__).resolve().parents[2] / "samples"
+    rank = samples / "Clasificación CRE Cadete Femenino Liga Oro - jornada 1 jugada.xls"
+    cal = samples / "Calendario CRE Cadete Femenino Liga Oro - jornada 1 jugada.xls"
+    teams = [r.team for r in parse_ranking(read_rows(rank.read_bytes()))]
+    played = {(m.home, m.away): (m.home_sets, m.away_sets, m.partials)
+              for m in parse_calendar(read_rows(cal.read_bytes()), teams) if m.home_sets is not None}
+    assert played == {
+        ("AULE", "Maristas Burgos A"): (0, 3, [[16, 25], [19, 25], [20, 25]]),
+        ("Sporting Santo Domingo A", "Linecar Voleibol Ponferrada"): (3, 0, [[25, 17], [25, 8], [25, 12]]),
     }

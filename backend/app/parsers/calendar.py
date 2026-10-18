@@ -11,7 +11,10 @@ Particularidades del Excel:
   octubre de 2026): "131425112525181225&dash;&dash;" = sets 1-3 y parciales
   14-25, 11-25, 25-18, 12-25. Ver `parse_packed`. Si algún día llega con
   separadores ("3 - 1", "25-20 22-25"), también se entiende.
+- Si esos parciales son solo cifras y no empiezan por 0 (gana el local), el
+  Excel los guarda como número: 3.025172582512e+16. Ver `packed_from_number`.
 """
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -126,6 +129,40 @@ def parse_packed(text: str) -> Optional[Tuple[int, int, List[List[int]]]]:
     return (hs, as_, found[0]) if len(found) == 1 else None
 
 
+MAX_CANDIDATES = 9000  # enteros a probar cuando el número ha perdido cifras (hasta ~20 cifras)
+
+
+def packed_from_number(value: Any) -> Optional[Tuple[int, int, List[List[int]]]]:
+    """Parciales que el Excel guardó como número, p. ej. 3.025172582512e+16 = «30251725825120000».
+
+    Un número de coma flotante solo conserva unas 16 cifras, así que en los
+    partidos largos se pierden las últimas. Los sets ganados son las dos primeras
+    cifras y esas nunca se pierden. Los parciales se recuperan probando los enteros
+    que dan ese mismo número: si solo uno cuadra, se usan; si no se puede saber,
+    se queda el resultado en sets sin parciales.
+    """
+    if not isinstance(value, float) or not math.isfinite(value) or value < 1000:
+        return None
+    base = int(value)
+    digits = str(base)
+    hs, as_ = int(digits[0]), int(digits[1])
+    if not 1 <= hs + as_ <= 7:
+        return None
+    half = int(math.ulp(value) // 2)
+    if 2 * half + 1 > MAX_CANDIDATES:
+        return (hs, as_, [])
+    found = {}
+    for n in range(base - half, base + half + 1):
+        if float(n) != value:
+            continue
+        parsed = parse_packed(str(n))
+        if parsed and parsed[:2] == (hs, as_):
+            found[str(parsed[2])] = parsed
+    if not found:
+        return None  # ningún reparto cuadra: acta incompleta
+    return next(iter(found.values())) if len(found) == 1 else (hs, as_, [])
+
+
 def parse_score(result: str, partials_text: str) -> Tuple[Optional[int], Optional[int], List[List[int]]]:
     partials: List[List[int]] = []
     if partials_text and not set(partials_text) <= set("-–— "):
@@ -222,8 +259,15 @@ def parse_calendar(rows: List[List[Any]], known_teams: Iterable[str]) -> List[Ma
             score_text = ""
         else:
             score_text = result_text
-        partials_text = str(cell(row, c_partials) or "")
-        home_sets, away_sets, partials = parse_score(score_text, partials_text)
+        raw_partials = cell(row, c_partials)
+        if isinstance(raw_partials, float):  # parciales guardados como número (ver packed_from_number)
+            partials_text = str(int(raw_partials)) if raw_partials >= 1 else ""
+            home_sets, away_sets, partials = parse_score(score_text, "")
+            if home_sets is None:
+                home_sets, away_sets, partials = packed_from_number(raw_partials) or (None, None, [])
+        else:
+            partials_text = str(raw_partials or "")
+            home_sets, away_sets, partials = parse_score(score_text, partials_text)
         # Para revisar el formato: el texto del que sale el resultado (o el que no se ha entendido)
         packed = partials_text.strip() if PACKED_RE.match(partials_text) else ""
 
