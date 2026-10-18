@@ -129,7 +129,9 @@ export function createEmitter(liveId, onInfo = () => {}) {
   // Al conectarse (o volver a la pantalla) se confirma que sigue siendo el principal
   claimLive(liveId)
     .then((r) => {
-      seq = r.seq;
+      // Lo que ya esté pendiente (el 0-0 inicial) tiene que ir con un número mayor
+      // que el último que conoce el servidor; si no, lo tomaría por repetido
+      seq = r.seq + (latest ? 1 : 0);
       ready = true;
       set({ status: 'ok', viewers: r.viewers });
       if (latest) schedule(0);
@@ -151,10 +153,16 @@ export function createEmitter(liveId, onInfo = () => {}) {
     if (dead || !ready || !latest) return;
     if (inflight) return schedule(300);
     inflight = true;
+    const sent = seq;
     try {
-      const r = await api(`/api/live/${liveId}`, { method: 'POST', json: { seq, state: latest } });
+      const r = await api(`/api/live/${liveId}`, { method: 'POST', json: { seq: sent, state: latest } });
       retry = 0;
       set({ status: 'ok', viewers: r.viewers, message: '' });
+      // El servidor iba por delante (p. ej. tras retomar una retransmisión): se reenvía con un número mayor
+      if (r.seq > sent) {
+        seq = r.seq + 1;
+        schedule(0);
+      }
     } catch (err) {
       if (!fail(err)) {
         retry += 1;
@@ -200,7 +208,8 @@ export function createEmitter(liveId, onInfo = () => {}) {
 
 /**
  * Conecta un visor. `onMessage` recibe los mensajes del servidor
- * ({type: 'state'|'waiting'|'viewers'|'ping', ...}) y `onStatus` el estado de la
+ * ({type: 'state'|'ready'|'waiting'|'viewers'|'ping', ...}; `ready` = el anotador ya
+ * está dentro pero aún no ha mandado el tanteo) y `onStatus` el estado de la
  * conexión: 'connecting' | 'live' | 'reconnecting' | 'polling' | 'gone'.
  */
 export function connectLive(liveId, onMessage, onStatus = () => {}) {
@@ -273,7 +282,7 @@ export function connectLive(liveId, onMessage, onStatus = () => {}) {
   async function poll() {
     try {
       const r = await api(`/api/live/${liveId}`);
-      deliver(r.live || { type: 'waiting', viewers: r.viewers });
+      deliver(r.live || { type: r.ready ? 'ready' : 'waiting', viewers: r.viewers });
     } catch (err) {
       if (err.status === 404) {
         stopPolling();

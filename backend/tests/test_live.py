@@ -242,3 +242,38 @@ def test_purge_old(client, league):
     with SessionLocal() as s:
         assert live.purge_old(s) == 0
         assert live.purge_old(s, now=datetime.now(timezone.utc) + timedelta(days=3)) == 1
+
+
+def test_viewers_know_when_broadcast_is_ready(client, league):
+    """El anotador ya está dentro pero aún no hay tanteo: «lista, a la espera del inicio»."""
+    lid = league
+    as_scorer = scorers(client, "Ana")
+    with client.websocket_connect(f"/api/live/{lid}/ws") as ws:
+        assert next_msg(ws, "waiting", "ready")["type"] == "waiting"
+        as_scorer("Ana")
+        assert client.post(f"/api/live/{lid}/claim", json={}).status_code == 200
+        assert next_msg(ws, "waiting", "ready", "state")["type"] == "ready"  # al momento, sin esperar al primer punto
+    # Quien entra después también lo ve, y el plan B lo indica
+    with client.websocket_connect(f"/api/live/{lid}/ws") as ws:
+        assert next_msg(ws, "waiting", "ready", "state")["type"] == "ready"
+    assert client.get(f"/api/live/{lid}").json()["ready"] is True
+    # Si deja de emitir antes de empezar, se vuelve a esperar
+    with client.websocket_connect(f"/api/live/{lid}/ws") as ws:
+        next_msg(ws, "ready")
+        assert client.delete(f"/api/live/{lid}").status_code == 200
+        assert next_msg(ws, "waiting", "ready")["type"] == "waiting"
+    assert client.get(f"/api/live/{lid}").json()["ready"] is False
+
+
+def test_initial_zero_zero_is_kept(client, league):
+    """El 0-0 inicial (seq 1 tras reclamar con seq 0) se guarda y llega a los visores."""
+    lid = league
+    as_scorer = scorers(client, "Ana")
+    as_scorer("Ana")
+    seq = client.post(f"/api/live/{lid}/claim", json={}).json()["seq"]
+    with client.websocket_connect(f"/api/live/{lid}/ws") as ws:
+        next_msg(ws, "ready")
+        r = client.post(f"/api/live/{lid}", json={"seq": seq + 1, "state": state((0, 0, False), serve=None)})
+        assert r.json()["seq"] == seq + 1
+        msg = next_msg(ws, "state")
+        assert msg["state"]["sets"] == [[0, 0, False]] and msg["on"] is True

@@ -188,6 +188,16 @@ def summary(row: Optional[LiveScore], now: Optional[datetime] = None) -> Optiona
     }
 
 
+def is_ready(row: Optional[LiveScore], now: Optional[datetime] = None) -> bool:
+    """Alguien ya lleva el marcador de este partido, aunque aún no haya mandado el primer tanteo."""
+    return row is not None and row.ended_at is None and not is_stale(row, now)
+
+
+def idle_message(row: Optional[LiveScore]) -> dict:
+    """Sin tanteo todavía: `ready` si el anotador ya está dentro, `waiting` si aún no."""
+    return {"type": "ready" if is_ready(row) else "waiting"}
+
+
 def state_message(row: LiveScore, viewers: int, lead_age: Optional[int]) -> dict:
     return {
         "type": "state",

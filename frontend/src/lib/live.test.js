@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // api.js toca `document` al cargarse: aquí solo se prueba la lógica pura
 vi.mock('./api.js', () => ({ api: vi.fn() }));
-import { flipFor, fromLive, hasProgress, liveEvents, liveScoreText, toLive } from './live.js';
+import { api } from './api.js';
+import { createEmitter, flipFor, fromLive, hasProgress, liveEvents, liveScoreText, toLive } from './live.js';
 import * as S from './scoring.js';
 
 const FMT = { mode: 'best_of', sets: 3, points: 25, tiebreak: 15 };
@@ -67,5 +68,52 @@ describe('liveEvents', () => {
       st([[25, 20, true], [20, 25, true], [15, 10, true]], { status: 'match_over' }),
     );
     expect(end).toContainEqual({ type: 'end', side: 'home' });
+  });
+});
+
+describe('createEmitter', () => {
+  const posts = () => api.mock.calls.filter(([path, opts]) => opts?.method === 'POST' && !path.endsWith('/claim'));
+
+  it('el 0-0 inicial se manda con un número mayor que el del servidor', async () => {
+    vi.useFakeTimers();
+    api.mockReset();
+    let answerClaim;
+    api.mockImplementation((path, opts) =>
+      path.endsWith('/claim')
+        ? new Promise((resolve) => (answerClaim = resolve))
+        : Promise.resolve({ ok: true, seq: opts.json.seq, viewers: 3 }),
+    );
+    const infos = [];
+    const e = createEmitter('1-1-abcdef12', (i) => infos.push(i));
+    e.send(st([[0, 0, false]], { serve: null })); // «Empezar»: el 0-0 sale antes de que conteste el reclamo
+    await vi.advanceTimersByTimeAsync(400);
+    expect(posts()).toHaveLength(0);
+    answerClaim({ seq: 0, viewers: 3 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0][1].json.seq).toBe(1); // antes salía con 0 y el servidor lo descartaba
+    e.send(st([[1, 0, false]]));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(posts().at(-1)[1].json.seq).toBe(2);
+    expect(infos.at(-1)).toMatchObject({ status: 'ok', viewers: 3 });
+    e.dispose();
+    vi.useRealTimers();
+  });
+
+  it('si el servidor iba por delante, se reenvía con un número mayor', async () => {
+    vi.useFakeTimers();
+    api.mockReset();
+    let server = 40;
+    api.mockImplementation((path, opts) => {
+      if (path.endsWith('/claim')) return Promise.reject(Object.assign(new Error('Sin conexión'), { status: 0 }));
+      server = Math.max(server, opts.json.seq);
+      return Promise.resolve({ ok: true, seq: server, viewers: 0 });
+    });
+    const e = createEmitter('1-1-abcdef12');
+    e.send(st([[5, 3, false]]));
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(posts().at(-1)[1].json.seq).toBe(41);
+    e.dispose();
+    vi.useRealTimers();
   });
 });

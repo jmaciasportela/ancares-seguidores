@@ -36,7 +36,8 @@ def _row_or_409(session: Session, live_id: str):
 
 
 @router.post("/{live_id}/claim")
-def claim(live_id: str, data: LiveClaimIn, who: Publisher = Depends(require_publisher), session: Session = Depends(get_session)):
+async def claim(live_id: str, data: LiveClaimIn, who: Publisher = Depends(require_publisher),
+                session: Session = Depends(get_session)):
     m = live.find_match(session, live_id)
     if not m:
         raise HTTPException(status_code=404, detail="No encuentro ese partido de Ancares")
@@ -46,6 +47,8 @@ def claim(live_id: str, data: LiveClaimIn, who: Publisher = Depends(require_publ
     except LiveError as err:
         raise _fail(err) from err
     hub.mark_seen(live_id)
+    if not row.state:  # los que ya esperan saben al momento que la retransmisión está lista
+        await hub.broadcast(live_id, {"type": "ready", "viewers": hub.viewers(live_id)})
     return {"lead": True, "id": row.live_id, "seq": row.seq, "state": row.state, "viewers": hub.viewers(live_id)}
 
 
@@ -75,6 +78,8 @@ async def stop(live_id: str, who: Publisher = Depends(require_publisher), sessio
         raise _fail(err) from err
     if row.state:
         await hub.broadcast(live_id, live.state_message(row, hub.viewers(live_id), hub.lead_age(live_id, row)))
+    else:
+        await hub.broadcast(live_id, {"type": "waiting", "viewers": hub.viewers(live_id)})
     return {"ok": True}
 
 
@@ -90,17 +95,17 @@ def get_live(live_id: str, request: Request, session: Session = Depends(get_sess
     match.update(category=cat.name, category_slug=cat.slug, score_format=format_of(cat.score_format))
     viewers = hub.viewers(live_id)
     state = live.state_message(row, viewers, hub.lead_age(live_id, row)) if row and row.state else None
-    return cached_json(request, {"match": match, "live": state, "viewers": viewers})
+    return cached_json(request, {"match": match, "live": state, "ready": live.is_ready(row), "viewers": viewers})
 
 
 @router.websocket("/{live_id}/ws")
 async def live_ws(ws: WebSocket, live_id: str):
-    """Solo lectura: al conectar manda el estado (o `waiting`) y luego cada cambio."""
+    """Solo lectura: al conectar manda el estado (o `ready`/`waiting` si aún no hay tanteo) y luego cada cambio."""
     ip = client_ip(ws)
     with SessionLocal() as session:
         m = live.find_match(session, live_id)
         row = live.row_for(session, live_id) if m else None
-        first = live.state_message(row, 0, hub.lead_age(live_id, row)) if row and row.state else {"type": "waiting"}
+        first = live.state_message(row, 0, hub.lead_age(live_id, row)) if row and row.state else live.idle_message(row)
     await ws.accept()
     if not m:
         await ws.close(code=4404)

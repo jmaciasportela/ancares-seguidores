@@ -19,6 +19,7 @@
   let match = $state(null);
   let missing = $state(false);
   let live = $state.raw(null); // último estado recibido: {state, on, seq, lead_age}
+  let ready = $state(false); // el anotador ya está dentro, aunque aún no haya tanteo
   let viewers = $state(0);
   let conn = $state('connecting'); // connecting | live | reconnecting | polling | gone
   let leadAge = $state(null);
@@ -38,14 +39,19 @@
   const hint = (side) =>
     game.status !== 'playing' ? '' : S.isMatchPoint(game, side) ? 'Punto de partido' : S.isSetPoint(game, side) ? 'Punto de set' : '';
   const done = $derived(game ? game.sets.filter((s, i) => s.done && (i < game.sets.length - 1 || over)) : []);
+  // Marcador preparado a 0-0: el partido aún no ha empezado
+  const notStarted = $derived(
+    !!game && game.status === 'playing' && game.sets.length === 1 && !S.currentSet(game).home && !S.currentSet(game).away,
+  );
   // Segundos sin señal del anotador (el servidor lo dice al conectar y en cada ping)
   const silent = $derived(leadAge == null ? 0 : leadAge + (now - leadAt) / 1000);
 
   const status = $derived.by(() => {
     if (conn === 'gone') return { text: 'No disponible', tone: 'off' };
-    if (!live) return { text: conn === 'reconnecting' ? 'Reconectando…' : 'Esperando', tone: 'wait' };
+    if (!live) return conn === 'reconnecting' ? { text: 'Reconectando…', tone: 'wait' } : ready ? { text: 'Lista', tone: 'ready' } : { text: 'Esperando', tone: 'wait' };
     if (over) return { text: 'Final', tone: 'end' };
     if (!live.on) return { text: 'Retransmisión parada', tone: 'off' };
+    if (notStarted && silent <= 180) return { text: 'Lista', tone: 'ready' };
     if (silent > 180) return { text: `Sin señal hace ${Math.round(silent / 60)} min`, tone: 'off' };
     if (conn === 'reconnecting') return { text: 'Reconectando…', tone: 'wait' };
     return { text: 'En directo', tone: 'live' };
@@ -63,6 +69,8 @@
       leadAge = msg.lead_age;
       leadAt = Date.now();
     }
+    if (msg.type === 'ready') ready = true;
+    if (msg.type === 'waiting') ready = false;
     if (msg.type !== 'state') return;
     const prev = live?.state;
     live = msg;
@@ -91,6 +99,7 @@
         match = r.match;
         viewers = r.viewers;
         if (r.live) onMessage(r.live);
+        else ready = !!r.ready;
         connection = connectLive(id, onMessage, (s) => (conn = s));
       })
       .catch((err) => {
@@ -153,6 +162,9 @@
           flash={flash[side]}
         />
       {/each}
+      {#if notStarted && !banner && live.on}
+        <div class="banner soft" transition:fade>🏐 Todo listo: esperando el primer punto</div>
+      {/if}
       {#if banner}
         {#key banner.key}
           <div class="banner" class:big={banner.big} in:pop out:fade>{banner.text}</div>
@@ -183,8 +195,13 @@
         <button class="btn light" onclick={() => go(`/c/${match.category_slug}?t=resultados`)}>Ver resultados</button>
       {:else}
         <p class="when">{formatWhen(match.starts_at)}</p>
-        <p class="pulse"><i></i> Aún no ha empezado la retransmisión</p>
-        <p class="muted-light">Esta pantalla se actualizará sola en cuanto alguien empiece a llevar el marcador.</p>
+        {#if ready}
+          <p class="pulse ready"><i></i> Retransmisión lista</p>
+          <p class="muted-light">El marcador ya está preparado: en cuanto empiece el partido verás aquí cada punto al momento.</p>
+        {:else}
+          <p class="pulse"><i></i> Aún no ha empezado la retransmisión</p>
+          <p class="muted-light">Esta pantalla se actualizará sola en cuanto alguien empiece a llevar el marcador.</p>
+        {/if}
         {#if viewers > 1}<p class="muted-light">👀 {viewers} esperando</p>{/if}
       {/if}
       {#if match.cheers?.open}<div class="cheer-wrap"><CheerBar {match} /></div>{/if}
@@ -259,7 +276,8 @@
     background: #ff3b41;
     animation: blink 1s infinite;
   }
-  .state.end {
+  .state.end,
+  .state.ready {
     background: #8ee39c;
     color: #0b1a10;
   }
@@ -301,6 +319,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  }
+  .banner.soft {
+    width: max-content;
+    max-width: 84%;
+    white-space: normal;
+    border-radius: 18px;
+    background: rgba(11, 26, 16, 0.88);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 750;
+    line-height: 1.3;
+    border: 1px solid rgba(142, 227, 156, 0.5);
   }
   .banner.big {
     padding: 18px 30px;
@@ -387,6 +417,9 @@
     align-items: center;
     gap: 8px;
     font-weight: 700;
+  }
+  .pulse.ready {
+    color: #8ee39c;
   }
   .pulse i {
     width: 10px;
