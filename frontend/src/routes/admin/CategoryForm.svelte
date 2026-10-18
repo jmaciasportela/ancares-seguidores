@@ -16,7 +16,14 @@
     active: init.active ?? true,
     score_format: init.score_format ?? { ...DEFAULT_FORMAT },
     kind: init.kind ?? untrack(() => initialKind),
+    points_system: init.points_system ?? 'auto',
   });
+  // Normativa FVCL 2026-27: Cadete, Infantil, Alevín y Benjamín puntúan 2-1-0; Juvenil, Júnior y Sénior, 3-2-1-0
+  const POINTS = [
+    { id: 'auto', label: 'Automática (recomendada)', hint: 'Según la normativa de la FVCL para la categoría, comprobada con la clasificación oficial.' },
+    { id: '2-1-0', label: '2-1-0: Cadete, Infantil, Alevín, Benjamín', hint: '2 puntos por partido ganado y 1 por perdido, sea cual sea el resultado.' },
+    { id: '3-2-1-0', label: '3-2-1-0: Juvenil, Júnior, Sénior', hint: '3 por ganar 3-0 o 3-1, 2 por ganar 3-2 y 1 por perder 2-3.' },
+  ];
   const isTournament = $derived(f.kind === 'tournament');
   let busy = $state(false);
 
@@ -65,6 +72,17 @@
     <span class="label">Formato del marcador</span>
     <FormatPicker bind:value={f.score_format} />
     <span class="hint">El Marcador lo propone al anotar partidos de esta categoría (se puede cambiar antes de empezar).</span>
+  </div>
+  <div class="field">
+    <label for="c-points">Puntuación de la clasificación</label>
+    <select id="c-points" class="input" bind:value={f.points_system}>
+      {#each POINTS as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
+    </select>
+    <span class="hint">
+      {POINTS.find((p) => p.id === f.points_system)?.hint}
+      {#if initial?.points_applied} Ahora se aplica: <b>{initial.points_applied.id}</b> ({initial.points_applied.source_label}).{/if}
+      Se usa en la clasificación provisional, la evolución y los grupos de torneo; la tabla oficial viene tal cual de la federación.
+    </span>
   </div>
   <div class="row">
     <div class="field">

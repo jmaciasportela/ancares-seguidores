@@ -18,6 +18,7 @@ class CategoryIn(BaseModel):
     active: bool = True
     score_format: Optional[ScoreFormat] = None
     kind: Literal["league", "tournament"] = "league"
+    points_system: Literal["auto", "3-2-1-0", "2-1-0"] = "auto"
 
     @field_validator("ranking_url", "calendar_url")
     @classmethod

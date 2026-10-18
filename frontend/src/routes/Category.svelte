@@ -176,7 +176,7 @@
               {#if data.groups.length > 1 || g.name !== 'Partidos'}<h2 class="group">{g.name}</h2>{/if}
               <StandingsTable standings={withProvisional && g.with_provisional ? g.with_provisional : g.standings} />
             {/each}
-            <p class="legend muted">Puntos: 3 por ganar, 2 por ganar en el set decisivo, 1 por perderlo · Las eliminatorias están en Calendario</p>
+            <p class="legend muted">Puntos: {data.points_system?.label ?? 'según la normativa'} · Las eliminatorias están en Calendario</p>
           {:else}
             <div class="card empty">Este torneo no tiene fase de grupos: mira el Calendario.</div>
           {/if}
@@ -193,7 +193,9 @@
               {/if}
             {/if}
             <StandingsTable standings={withProvisional && provisionalTable ? provisionalTable : data.standings} />
-            <p class="legend muted">Pts: puntos · PJ: jugados · G: ganados · P: perdidos<span class="sets-legend"> · Sets: a favor - en contra</span></p>
+            <p class="legend muted">
+              {#if data.points_system}<b>Pts:</b> {data.points_system.label}{:else}Pts: puntos{/if} · PJ: jugados · G: ganados · P: perdidos<span class="sets-legend"> · Sets: a favor - en contra</span>
+            </p>
           {:else}
             <div class="card empty">Aún no hay clasificación.</div>
           {/if}

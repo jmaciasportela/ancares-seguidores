@@ -6,6 +6,7 @@ from .models import Category, LiveScore, Match, ProvisionalResult, Standing
 from .parsers.common import norm
 from .scoring_format import format_of
 from .services.cheers import summary as cheer_summary
+from .services.stats import points_system
 from .services.live import live_id, summary as live_summary
 from .services.provisional import Key, match_key
 
@@ -174,6 +175,7 @@ def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
         "last_result": match_out(lr, ctx) if lr else None,
         "score_format": format_of(c.score_format),
         "kind": c.kind or "league",
+        "points_system": points_system(c),  # la puntuación que se aplica y de dónde sale
         "updated_at": iso(c.data_updated_at),  # último cambio real en los datos
         "checked_at": iso(c.last_sync_at),  # última comprobación con la FVCL
     }
@@ -202,6 +204,8 @@ def category_admin(c: Category) -> dict:
         "active": c.active,
         "score_format": format_of(c.score_format),
         "kind": c.kind or "league",
+        "points_system": c.points_system or "auto",
+        "points_applied": points_system(c),
         "sync_status": c.sync_status,
         "last_error": c.last_error,
         "last_sync_at": iso(c.last_sync_at),

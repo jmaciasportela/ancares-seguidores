@@ -251,6 +251,7 @@ def _rows(table: List[stats.Row], logo, previous: Optional[Dict[str, int]] = Non
 
 def group_tables(category: Category, provisional_for, logo) -> List[dict]:
     """Una clasificación por fase de grupo; con provisionales, otra versión que los incluye."""
+    rule = stats.points_rule(category)  # la del admin o la de la normativa según la categoría
     phases: Dict[str, List[Match]] = {}
     for m in sorted(category.matches, key=lambda m: m.order):
         if not m.is_bye and m.away and is_group_phase(m.round_name):
@@ -264,11 +265,11 @@ def group_tables(category: Category, provisional_for, logo) -> List[dict]:
             p = provisional_for(m) if m.home_sets is None else None
             if p:
                 pending.append(_result(m, p.home_sets, p.away_sets, p.partials or [], True))
-        table = stats.build_table(teams, confirmed)
+        table = stats.build_table(teams, confirmed, rule=rule)
         positions = {norm(r.team): i for i, r in enumerate(table, start=1)}
         out.append({
             "name": name,
             "standings": _rows(table, logo),
-            "with_provisional": _rows(stats.build_table(teams, confirmed + pending), logo, positions) if pending else None,
+            "with_provisional": _rows(stats.build_table(teams, confirmed + pending, rule=rule), logo, positions) if pending else None,
         })
     return out

@@ -190,9 +190,24 @@ Cuando un anotador (o el admin) empieza a llevar un partido de liga, se **emite 
 - **Cómo funciona:** el anotador manda el estado completo del marcador en cada cambio (un reintento con mala cobertura no descuadra nada) y un latido cada minuto. Los visores lo reciben por WebSocket; si no conecta, consultan cada 5 s. El estado se guarda en la base de datos, así que un reinicio no lo pierde, y se borra a los 2 días.
 - **Resultado:** el directo no cuenta como resultado. Al terminar, el anotador publica el resultado provisional como siempre.
 
+## Puntuación y desempates
+
+La clasificación oficial se muestra tal cual la publica la federación. La app solo calcula puntos en la **clasificación provisional**, en la **evolución** de Estadísticas y en los **grupos de los torneos**, y lo hace según la normativa de la FVCL (Normas Generales de Voleibol 2026-27, «Sistema de puntuación»):
+
+| Categorías | Gana | Pierde | No presentado |
+|---|---|---|---|
+| Cadete, Infantil, Alevín y Benjamín (**2-1-0**) | 2 | 1 | 0 |
+| Juvenil, Júnior y Sénior (**3-2-1-0**) | 3 si gana 3-0 o 3-1; 2 si gana 3-2 | 1 si pierde 2-3; 0 si pierde 0-3 o 1-3 | 0 |
+
+- **Qué regla se aplica:** la que elija el admin en la categoría. En «Automática», que es la opción por defecto, se usa la que cuadra con la clasificación oficial cuando los resultados permiten distinguirla. Si aún no hay resultados, o solo partidos 3-2, se usa la de la normativa según el nombre de la categoría. Se ve en la lista de categorías del admin.
+- **Para las familias:** la leyenda de la clasificación explica la puntuación («Pts: 2 por partido ganado y 1 por perdido»).
+- **Desempates:** la FVCL no los fija, así que se aplica de forma supletoria la RFEVB. El orden es puntos, partidos ganados, cociente de sets y cociente de puntos. El último criterio, el resultado entre los empatados, no se aplica: la app ordena entonces por nombre.
+- **Fuentes:** [Normas Generales de Voleibol FVCL 26-27](https://cdn.leverade.com/files/cyNue0tvjp.pdf) (pág. 22), [Normas Específicas de Voleibol FVCL 26-27](https://cdn.leverade.com/files/FI6iWOoYc0.pdf) y [Normas Generales de Competición RFEVB 25-26](https://esvoley.es/media/plkbqsz1/nevb-2526-normas-generales-competici%C3%B3n-cd-28-10-25.pdf) (art. 24.1).
+
 ## Particularidades de los Excel de la FVCL (Clupik)
 
 - Son `.xls` antiguos con el contenedor OLE «corrupto», así que se abren con `xlrd` y `ignore_workbook_corruption=True`.
 - En el calendario, local y visitante vienen **en la misma celda** (`"CDF Voleibol Ancares UVa VCV Castilla"`). Se separan usando los nombres de la clasificación.
 - El `GMT+2` de las fechas es el desfase **del día de la exportación**, no del partido. Por eso la hora de reloj se interpreta siempre en Europe/Madrid.
-- Cuando se publiquen los primeros resultados, revisa que el formato coincide con lo esperado (`3 - 1` y parciales `25-20…`). El texto original se guarda en `matches.raw_result`.
+- **Resultados:** la columna «Resultado» repite la fecha también en los partidos jugados. El resultado viene en «Parciales», todo seguido y sin separadores: `131425112525181225‐‐` son sets 1-3 y parciales 14-25, 11-25, 25-18, 12-25. Se busca la única forma de partirlo en sets válidos que cuadre con los sets ganados. Si no cuadra (acta incompleta), no se da por jugado. El texto original se guarda en `matches.raw_result`.
+- **Provisionales:** en cuanto el calendario trae el resultado oficial, el provisional se borra. Si la clasificación oficial ya cuenta un partido que el calendario aún no trae, tampoco se suma otra vez.

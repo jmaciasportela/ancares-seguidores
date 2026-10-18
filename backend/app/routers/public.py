@@ -106,6 +106,7 @@ def category_stats(slug: str, request: Request, session: Session = Depends(get_s
         **evo,
         "ours": stats.ours_stats(cat, key, ctx.provisional_for) if key else None,
         "provisional_table": prov,
+        "points_system": stats.points_system(cat),
     })
 
 

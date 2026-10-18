@@ -7,6 +7,7 @@
   let { slug } = $props();
   const res = $derived(resource(`/api/categories/${slug}/stats`));
   const data = $derived($res.data);
+  const points = $derived(data?.points_system);
   const o = $derived(data?.ours);
   const LABEL = { W: 'V', L: 'D', D: 'E' };
   const TITLE = { W: 'Victoria', L: 'Derrota', D: 'Empate' };
@@ -55,7 +56,7 @@
       <h3>Posición por jornada</h3>
       <PositionChart rounds={data.rounds} teams={data.teams} total={o.teams} />
       {#if data.approximate}
-        <p class="muted small">Evolución reconstruida con los resultados del calendario: puede no coincidir del todo con la clasificación oficial (sanciones, aplazamientos…).</p>
+        <p class="muted small">Evolución reconstruida con los resultados del calendario: puede no coincidir del todo con la clasificación oficial (sanciones, aplazamientos…).{#if points} Puntuación: {points.label}.{/if}</p>
       {/if}
     </section>
   {/if}

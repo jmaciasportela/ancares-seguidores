@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 from starlette.websockets import WebSocketDisconnect
 
-from conftest import CALENDAR_XLS, RANKING_XLS
+from conftest import CALENDAR_XLS, RANKING_XLS, clear_ours_dates_except
 from app.db import SessionLocal
 from app.models import LiveScore, Match
 from app.services import live
@@ -28,6 +28,7 @@ def league(client, ranking_bytes, calendar_bytes):
     files = [("files", (RANKING_XLS.name, ranking_bytes, "application/vnd.ms-excel")),
              ("files", (CALENDAR_XLS.name, calendar_bytes, "application/vnd.ms-excel"))]
     client.post("/api/admin/upload", files=files, data={"category_id": cat["id"]})
+    clear_ours_dates_except("VCV Castilla")
     with SessionLocal() as s:
         m = s.scalars(select(Match).where(Match.home == OURS, Match.away == "VCV Castilla")).first()
         m.starts_at = datetime.now(timezone.utc) - timedelta(minutes=20)

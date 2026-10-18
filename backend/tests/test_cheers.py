@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from conftest import CALENDAR_XLS, RANKING_XLS
+from conftest import CALENDAR_XLS, RANKING_XLS, clear_ours_dates_except
 from app.db import SessionLocal
 from app.models import Match
 from app.services import cheers
@@ -21,6 +21,7 @@ def league(client, ranking_bytes, calendar_bytes):
     files = [("files", (RANKING_XLS.name, ranking_bytes, "application/vnd.ms-excel")),
              ("files", (CALENDAR_XLS.name, calendar_bytes, "application/vnd.ms-excel"))]
     client.post("/api/admin/upload", files=files, data={"category_id": cat["id"]})
+    clear_ours_dates_except("VCV Castilla")
     client.cookies.clear()  # los ánimos son de cualquiera, sin sesión
     return cat
 

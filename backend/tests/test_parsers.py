@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 
-from app.parsers.calendar import parse_calendar, parse_score, parse_when, split_teams
+from app.parsers.calendar import parse_calendar, parse_packed, parse_score, parse_when, split_teams
 from app.parsers.common import ParseError, detect_kind, read_rows
 from app.parsers.ranking import parse_ranking
 
@@ -77,3 +77,32 @@ def test_parse_score():
     assert parse_score("3 - 1", "25-20, 22-25, 25-18, 25-10") == (3, 1, [[25, 20], [22, 25], [25, 18], [25, 10]])
     assert parse_score("", "25-20 25-18 25-10") == (3, 0, [[25, 20], [25, 18], [25, 10]])
     assert parse_score("", "----------") == (None, None, [])
+
+
+def test_parse_packed_clupik_partials():
+    # Formato real de la FVCL: sets del local y del visitante y luego los puntos, todo seguido
+    assert parse_packed("131425112525181225‐‐") == (1, 3, [[14, 25], [11, 25], [25, 18], [12, 25]])
+    assert parse_packed("131425112525181225&dash;&dash;") == (1, 3, [[14, 25], [11, 25], [25, 18], [12, 25]])
+    assert parse_packed("031025152520250000") == (0, 3, [[10, 25], [15, 25], [20, 25]])
+    # A cinco sets, con desempate a 15 y sets alargados
+    assert parse_packed("3227252325202525181513") == (3, 2, [[27, 25], [23, 25], [20, 25], [25, 18], [15, 13]])
+    assert parse_packed("203129251900") == (2, 0, [[31, 29], [25, 19]])  # el 3.º set, sin jugar
+    # Acta incompleta (los sets no cuadran con los parciales) o sin jugar: sin resultado
+    assert parse_packed("01251814252325122500") is None
+    assert parse_packed("&dash;" * 10) is None and parse_packed("") is None
+    # parse_score lo usa cuando no hay separadores
+    assert parse_score("", "131425112525181225‐‐") == (1, 3, [[14, 25], [11, 25], [25, 18], [12, 25]])
+
+
+def test_calendar_with_official_results():
+    from conftest import CALENDAR_J1_XLS, RANKING_J1_XLS
+    from app.parsers.common import read_rows
+    from app.parsers.ranking import parse_ranking
+
+    teams = [r.team for r in parse_ranking(read_rows(RANKING_J1_XLS.read_bytes()))]
+    cal = parse_calendar(read_rows(CALENDAR_J1_XLS.read_bytes()), teams)
+    played = {(m.home, m.away): (m.home_sets, m.away_sets, m.partials) for m in cal if m.home_sets is not None}
+    assert played == {
+        ("CDF Voleibol Ancares UVa", "VCV Castilla"): (1, 3, [[14, 25], [11, 25], [25, 18], [12, 25]]),
+        ("C.D. San José", "Maristas Inmaculada A"): (0, 3, [[10, 25], [15, 25], [20, 25]]),
+    }

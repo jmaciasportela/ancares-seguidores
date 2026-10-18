@@ -178,6 +178,7 @@
           <span>{cat.matches} partidos</span>
           <span>Último cambio {timeAgo(cat.updated_at)}</span>
           <span>Comprobado {timeAgo(cat.last_sync_at)}</span>
+          {#if cat.points_applied}<span>Puntuación {cat.points_applied.id} ({cat.points_applied.source_label})</span>{/if}
         </div>
         {#if cat.last_change}
           <p class="change small">🆕 {cat.last_change.message}</p>

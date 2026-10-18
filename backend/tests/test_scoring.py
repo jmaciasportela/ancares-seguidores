@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from conftest import CALENDAR_XLS, RANKING_XLS
+from conftest import CALENDAR_XLS, RANKING_XLS, clear_ours_dates_except
 from app.db import SessionLocal, engine, init_db
 from app.models import Category, Match
 from app.scoring_format import ResultError, format_of, validate_partials
@@ -58,6 +58,7 @@ def league(client, ranking_bytes, calendar_bytes):
         ("files", (CALENDAR_XLS.name, calendar_bytes, "application/vnd.ms-excel")),
     ]
     client.post("/api/admin/upload", files=files, data={"category_id": cat["id"]})
+    clear_ours_dates_except("VCV Castilla")
     with SessionLocal() as s:
         m = s.scalars(select(Match).where(Match.home == OURS, Match.away == "VCV Castilla")).first()
         m.starts_at = datetime.now(timezone.utc) - timedelta(hours=1)

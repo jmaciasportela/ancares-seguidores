@@ -72,7 +72,8 @@ def test_stats_with_results(client, league):
     data = client.get("/api/categories/infantil/stats").json()
     assert [x["round_no"] for x in data["rounds"]] == [1, 2]
     ours = next(t for t in data["teams"] if t["is_ours"])
-    assert len(ours["positions"]) == 2 and ours["points"] == [5, 5]  # descansa en la jornada 2
+    # Infantil puntúa 2-1-0 (normativa FVCL): dos victorias son 4 puntos; descansa en la jornada 2
+    assert len(ours["positions"]) == 2 and ours["points"] == [4, 4]
     assert data["approximate"] is True  # la tabla oficial de muestra sigue a cero
 
     o = data["ours"]
@@ -106,10 +107,14 @@ def test_provisional_table(client, league):
     assert table is not None
     ours = next(row for row in table if row["is_ours"])
     # La tabla oficial de muestra está a cero: el 3-0 provisional pone a Ancares primero
-    assert ours["position"] == 1 and ours["points"] == 3 and ours["delta"] == 4
-    # El resto conserva el orden oficial: solo bajan uno los que Ancares adelanta
-    others = {row["team"]: row["delta"] for row in table if not row["is_ours"]}
-    assert set(others.values()) <= {0, -1} and sum(1 for d in others.values() if d == -1) == 4
+    assert ours["position"] == 1 and ours["points"] == 2 and ours["delta"] == 4  # 2 por ganar en Infantil
+    # En 2-1-0 el que pierde también suma: Maristas Burgos A, con 1 punto, pasa a ser segundo.
+    # El resto conserva el orden oficial entre sí
+    rows = {row["team"]: row for row in table}
+    assert rows["Maristas Burgos A"]["points"] == 1 and rows["Maristas Burgos A"]["position"] == 2
+    rest = [row["team"] for row in table if row["points"] == 0]
+    official = [st["team"] for st in client.get("/api/categories/infantil").json()["standings"]]
+    assert rest == [t for t in official if t in rest]
     assert data["ours"]["has_provisional"] is True
     assert data["ours"]["streak"][-1] == {"round_name": "Jornada 3", "rival": "Maristas Burgos A",
                                           "result": "W", "score": "3-0", "provisional": True}

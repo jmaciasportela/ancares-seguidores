@@ -26,6 +26,8 @@ class Category(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Formato de puntuación para el marcador (ver scoring_format.py); None = por defecto
     score_format: Mapped[Optional[dict]] = mapped_column(JSON)
+    # Puntuación: "auto" (normativa FVCL y tabla oficial), "3-2-1-0" o "2-1-0"
+    points_system: Mapped[Optional[str]] = mapped_column(String(10), default="auto")
     # "league": liga de la FVCL (Excel); "tournament": torneo que da de alta el admin a mano
     kind: Mapped[str] = mapped_column(String(20), default="league")
     # Cabeceras ETag/Last-Modified de la FVCL por URL, para preguntar si ha cambiado

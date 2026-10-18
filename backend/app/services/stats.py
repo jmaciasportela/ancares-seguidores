@@ -2,17 +2,22 @@
 clasificación provisional.
 
 El Excel de la FVCL solo trae la clasificación actual, así que la evolución se
-reconstruye con los resultados del calendario y la puntuación de la federación
-(columnas «ganados con 3/2 puntos», «perdidos con 1 punto» del Excel):
-  - 3 puntos por ganar sin llegar al set decisivo (3-0, 3-1, 2-0)
-  - 2 por ganar en el set decisivo (3-2, 2-1) y 1 por perderlo (2-3, 1-2)
-  - 0 por perder sin llegar al decisivo
+reconstruye con los resultados del calendario. La puntuación depende de la
+categoría (Normas Generales de Voleibol de la FVCL 2026-27, «Sistema de puntuación»):
+  - «3-2-1-0» (Sénior, Júnior y Juvenil): 3 puntos por ganar sin llegar al set
+    decisivo (3-0, 3-1, 2-0), 2 por ganar en el decisivo (3-2, 2-1), 1 por
+    perderlo y 0 por perder sin llegar.
+  - «2-1-0» (Cadete, Infantil, Alevín y Benjamín): 2 por ganar y 1 por perder,
+    sea cual sea el resultado.
+  - En los dos casos, 0 por no presentarse. Ver `points_system`.
 Si la reconstrucción no cuadra con la tabla oficial (sanciones, aplazamientos...)
 se marca como aproximada; la tabla que se enseña siempre es la oficial.
 """
+import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 from ..models import Category, Match, Standing
 from ..parsers.common import norm
@@ -25,6 +30,33 @@ def match_points(own: int, opp: int) -> int:
     if own < opp:
         return 1 if opp >= 2 and own == opp - 1 else 0
     return 0  # empate (solo posible con sets fijos): sin regla oficial conocida
+
+
+PointsRule = Callable[[int, int], int]
+
+
+def win_loss_points(own: int, opp: int) -> int:
+    """2 por ganar y 1 por perder, sea cual sea el resultado (categorías de cantera)."""
+    return 2 if own > opp else 1 if own < opp else 0
+
+
+# Los dos sistemas de la normativa de la FVCL
+RULES: Dict[str, PointsRule] = {"3-2-1-0": match_points, "2-1-0": win_loss_points}
+POINTS_LABELS = {
+    "3-2-1-0": "3 por ganar 3-0 o 3-1, 2 por ganar 3-2 y 1 por perder 2-3",
+    "2-1-0": "2 por partido ganado y 1 por perdido",
+}
+POINTS_SOURCES = {"admin": "elegida por el admin", "official": "según la clasificación oficial", "rules": "normativa FVCL"}
+_CANTERA = re.compile(r"alev|benj|infantil|cadete")
+_MAYORES = re.compile(r"juvenil|junior|senior|division")
+
+
+def default_points_system(name: Optional[str]) -> str:
+    """La de la normativa de la FVCL según la categoría (por su nombre)."""
+    n = norm(name or "")
+    if _CANTERA.search(n):
+        return "2-1-0"
+    return "3-2-1-0"  # Juvenil, Júnior, Sénior... y lo que no se reconozca
 
 
 @dataclass
@@ -75,14 +107,14 @@ class Row:
     is_ours: bool = False
     official_position: Optional[int] = None
 
-    def apply(self, r: Result) -> None:
+    def apply(self, r: Result, rule: PointsRule = match_points) -> None:
         key = norm(self.team)
         own, opp = r.sets_of(key)
         pf, pa = r.points_of(key)
         self.played += 1
         self.won += own > opp
         self.lost += own < opp
-        self.points += match_points(own, opp)
+        self.points += rule(own, opp)
         self.sets_for += own
         self.sets_against += opp
         self.points_for += pf
@@ -107,15 +139,55 @@ def sort_rows(rows: Iterable[Row]) -> List[Row]:
     )
 
 
-def build_table(teams: Iterable[str], results: Iterable[Result], ours_key: Optional[str] = None) -> List[Row]:
+def build_table(teams: Iterable[str], results: Iterable[Result], ours_key: Optional[str] = None,
+                rule: PointsRule = match_points) -> List[Row]:
     rows = {norm(t): Row(team=t, is_ours=norm(t) == ours_key) for t in teams}
     for r in results:
         for name in (r.home, r.away):
             key = norm(name)
             if key not in rows:  # rival que no figura en la clasificación
                 rows[key] = Row(team=name, is_ours=key == ours_key)
-            rows[key].apply(r)
+            rows[key].apply(r, rule)
     return sort_rows(rows.values())
+
+
+def deduce_points_system(category: Category) -> Optional[str]:
+    """La que cuadra con la tabla oficial, comparándola con los resultados del calendario.
+
+    Solo cuentan los equipos cuyos partidos jugados en la tabla coinciden con los
+    resultados que trae el calendario. Si las dos reglas cuadran igual (sin
+    resultados, o solo partidos 3-2), no se puede saber: None.
+    """
+    results = collect_results(category, lambda m: None, include_provisional=False)
+    if not results or not category.standings:
+        return None
+    teams = [s.team for s in category.standings]
+    official = {norm(s.team): s for s in category.standings}
+    hits = {}
+    for key, rule in RULES.items():
+        rows = build_table(teams, results, rule=rule)
+        hits[key] = sum(
+            1 for r in rows
+            if norm(r.team) in official and r.played and official[norm(r.team)].played == r.played
+            and official[norm(r.team)].points == r.points
+        )
+    best = max(hits, key=hits.get)
+    return best if hits[best] > min(hits.values()) else None
+
+
+def points_system(category: Category) -> dict:
+    """Puntuación que se aplica: la del admin, la que confirma la tabla oficial o la de la normativa."""
+    chosen = category.points_system if category.points_system in RULES else None
+    source = "admin"
+    if not chosen:
+        chosen, source = deduce_points_system(category), "official"
+    if not chosen:
+        chosen, source = default_points_system(category.name), "rules"
+    return {"id": chosen, "label": POINTS_LABELS[chosen], "source": source, "source_label": POINTS_SOURCES[source]}
+
+
+def points_rule(category: Category) -> PointsRule:
+    return RULES[points_system(category)["id"]]
 
 
 def collect_results(category: Category, provisional_for, include_provisional: bool) -> List[Result]:
@@ -153,14 +225,15 @@ def evolution(category: Category, ours_key: Optional[str]) -> dict:
     results = collect_results(category, lambda m: None, include_provisional=False)
     rounds = sorted({r.round_no for r in results})
     names = {r.round_no: r.round_name for r in results}
+    rule = points_rule(category)
     series: Dict[str, dict] = {}
     for rn in rounds:
-        table = build_table(teams, [r for r in results if r.round_no <= rn], ours_key)
+        table = build_table(teams, [r for r in results if r.round_no <= rn], ours_key, rule)
         for pos, row in enumerate(table, start=1):
             s = series.setdefault(norm(row.team), {"team": row.team, "is_ours": row.is_ours, "positions": [], "points": []})
             s["positions"].append(pos)
             s["points"].append(row.points)
-    final = build_table(teams, results, ours_key) if results else []
+    final = build_table(teams, results, ours_key, rule) if results else []
     official = {norm(s.team): s for s in category.standings}
     approximate = any(
         norm(r.team) in official and (official[norm(r.team)].points, official[norm(r.team)].played) != (r.points, r.played)
@@ -245,11 +318,38 @@ def ours_stats(category: Category, ours_key: str, provisional_for) -> Optional[d
 
 # --- clasificación provisional ----------------------------------------------------
 
+def not_yet_counted(category: Category, pending: List[Result]) -> List[Result]:
+    """Quita los provisionales que la tabla oficial ya cuenta.
+
+    A veces la clasificación de la FVCL ya incluye un partido cuyo resultado aún
+    no trae el calendario (o que no se ha podido leer). Se nota porque esos dos
+    equipos tienen en la tabla más partidos jugados que resultados oficiales en el
+    calendario: ese partido ya está contado y no se suma otra vez.
+    """
+    official = Counter()
+    for m in category.matches:
+        if m.home_sets is not None and not m.is_bye and m.away:
+            official[norm(m.home)] += 1
+            official[norm(m.away)] += 1
+    extra = {norm(s.team): s.played - official[norm(s.team)] for s in category.standings}
+    keep = []
+    for r in pending:
+        h, a = norm(r.home), norm(r.away)
+        if extra.get(h, 0) > 0 and extra.get(a, 0) > 0:
+            extra[h] -= 1
+            extra[a] -= 1
+            continue
+        keep.append(r)
+    return keep
+
+
 def provisional_table(category: Category, ours_key: Optional[str], provisional_for) -> Optional[List[dict]]:
     """Tabla oficial + resultados provisionales aún no confirmados, reordenada."""
     pending = [r for r in collect_results(category, provisional_for, True) if r.provisional]
+    pending = not_yet_counted(category, pending)
     if not pending:
         return None
+    rule = points_rule(category)
     rows: Dict[str, Row] = {}
     for s in category.standings:
         rows[norm(s.team)] = Row(
@@ -260,7 +360,7 @@ def provisional_table(category: Category, ours_key: Optional[str], provisional_f
     for r in pending:
         for name in (r.home, r.away):
             if norm(name) in rows:
-                rows[norm(name)].apply(r)
+                rows[norm(name)].apply(r, rule)
     # A igualdad de puntos se respeta el orden oficial: así solo se mueve quien
     # suma puntos (y a quien adelanta), sin aplicar desempates que pueden no ser
     # exactamente los de la federación.

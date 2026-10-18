@@ -6,9 +6,11 @@ Particularidades del Excel:
   de la clasificación de la misma categoría.
 - Los descansos vienen como "descansa X" o "X descansa".
 - "Fecha" = "Sáb, 17/10/2026 17:00 GMT+2 Pabellón", solo el pabellón o vacía.
-- "Resultado" repite la fecha mientras el partido no se juega. El formato del
-  resultado jugado aún no se ha visto: se acepta "3 - 1" y se guarda el texto
-  original para poder ajustarlo.
+- "Resultado" repite la fecha, también cuando el partido ya se ha jugado.
+- El resultado viene en "Parciales", todo seguido y sin separadores (visto en
+  octubre de 2026): "131425112525181225&dash;&dash;" = sets 1-3 y parciales
+  14-25, 11-25, 25-18, 12-25. Ver `parse_packed`. Si algún día llega con
+  separadores ("3 - 1", "25-20 22-25"), también se entiende.
 """
 import re
 from dataclasses import dataclass, field
@@ -26,6 +28,8 @@ DATE_RE = re.compile(
     r"\s*(.*)$"
 )
 SETS_RE = re.compile(r"^\s*(\d)\s*[-–:]\s*(\d)\s*$")
+PACKED_RE = re.compile(r"^\s*(\d+)")
+SET_TARGETS = (11, 15, 21, 25)  # puntos de set habituales (25, desempate a 15 y formatos de cantera)
 PARTIAL_RE = re.compile(r"(\d{1,2})\s*[-–:]\s*(\d{1,2})")
 BYE_WORD = "descansa"
 LOCAL_TZ = ZoneInfo("Europe/Madrid")
@@ -69,6 +73,59 @@ def parse_when(text: str) -> Tuple[Optional[datetime], Optional[str]]:
     return when, (venue.strip() or None)
 
 
+def _finished_set(h: int, a: int) -> bool:
+    """¿Puede ser un set terminado? Llega a los puntos del set con 2 de diferencia, o se alarga de 2 en 2."""
+    w, lo = max(h, a), min(h, a)
+    return w - lo >= 2 and (w in SET_TARGETS or (w > SET_TARGETS[0] and w - lo == 2))
+
+
+def parse_packed(text: str) -> Optional[Tuple[int, int, List[List[int]]]]:
+    """Parciales de Clupik sin separadores.
+
+    «131425112525181225&dash;&dash;» = sets del local (1), del visitante (3) y los
+    puntos de cada set seguidos (14-25, 11-25, 25-18, 12-25). Los sets que no se
+    jugaron salen como «0» «0» o «&dash;». Como no hay separadores, se busca la
+    única forma de partirlo en sets válidos que cuadre con los sets ganados; si
+    no hay ninguna (acta incompleta) o hay varias, no se da por bueno.
+    """
+    m = PACKED_RE.match(text or "")
+    digits = m.group(1) if m else ""
+    if len(digits) < 4:
+        return None
+    hs, as_ = int(digits[0]), int(digits[1])
+    rest = digits[2:]
+    found: List[List[List[int]]] = []
+
+    def walk(i: int, sets: List[List[int]]) -> None:
+        if len(found) > 1:
+            return
+        if i == len(rest):
+            played = [s for s in sets if s != [0, 0]]
+            # Los sets sin jugar (0-0) solo pueden ir al final
+            if played and sets[: len(played)] == played:
+                won = (sum(h > a for h, a in played), sum(a > h for h, a in played))
+                if won == (hs, as_):
+                    found.append(played)
+            return
+        if len(sets) >= 7:
+            return
+        for lh in (1, 2):
+            for la in (1, 2):
+                j = i + lh + la
+                if j > len(rest):
+                    continue
+                h_txt, a_txt = rest[i : i + lh], rest[i + lh : j]
+                if (lh == 2 and h_txt[0] == "0") or (la == 2 and a_txt[0] == "0"):
+                    continue  # sin ceros a la izquierda
+                h, a = int(h_txt), int(a_txt)
+                if (h, a) != (0, 0) and not _finished_set(h, a):
+                    continue
+                walk(j, sets + [[h, a]])
+
+    walk(0, [])
+    return (hs, as_, found[0]) if len(found) == 1 else None
+
+
 def parse_score(result: str, partials_text: str) -> Tuple[Optional[int], Optional[int], List[List[int]]]:
     partials: List[List[int]] = []
     if partials_text and not set(partials_text) <= set("-–— "):
@@ -81,6 +138,10 @@ def parse_score(result: str, partials_text: str) -> Tuple[Optional[int], Optiona
     elif partials:
         home_sets = sum(1 for a, b in partials if a > b)
         away_sets = sum(1 for a, b in partials if b > a)
+    elif partials_text:
+        packed = parse_packed(partials_text)
+        if packed:
+            home_sets, away_sets, partials = packed
     return home_sets, away_sets, partials
 
 
@@ -161,7 +222,10 @@ def parse_calendar(rows: List[List[Any]], known_teams: Iterable[str]) -> List[Ma
             score_text = ""
         else:
             score_text = result_text
-        home_sets, away_sets, partials = parse_score(score_text, str(cell(row, c_partials) or ""))
+        partials_text = str(cell(row, c_partials) or "")
+        home_sets, away_sets, partials = parse_score(score_text, partials_text)
+        # Para revisar el formato: el texto del que sale el resultado (o el que no se ha entendido)
+        packed = partials_text.strip() if PACKED_RE.match(partials_text) else ""
 
         matches.append(
             MatchRow(
@@ -177,7 +241,7 @@ def parse_calendar(rows: List[List[Any]], known_teams: Iterable[str]) -> List[Ma
                 home_sets=home_sets,
                 away_sets=away_sets,
                 partials=partials,
-                raw_result=score_text or None,
+                raw_result=score_text or packed or None,
             )
         )
     if not matches:
