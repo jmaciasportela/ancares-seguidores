@@ -14,6 +14,7 @@ from ..parsers.ranking import parse_ranking
 from .changes import content_hash, diff_calendar, diff_ranking, summary
 from .logos import ensure_teams
 from .provisional import drop_superseded
+from .schedule import apply_overrides
 
 
 @dataclass
@@ -134,6 +135,8 @@ def _store_calendar(session: Session, category: Category, parsed) -> int:
                 # SQLite no guarda la zona: todo se almacena en UTC
                 starts_at=m.starts_at.astimezone(timezone.utc) if m.starts_at else None,
                 venue=m.venue,
+                excel_starts_at=m.starts_at.astimezone(timezone.utc) if m.starts_at else None,
+                excel_venue=m.venue,
                 home_sets=m.home_sets,
                 away_sets=m.away_sets,
                 partials=m.partials,
@@ -144,5 +147,6 @@ def _store_calendar(session: Session, category: Category, parsed) -> int:
         )
     session.flush()
     session.expire(category, ["matches"])
+    apply_overrides(session, category)  # los horarios que cambió el admin mandan sobre el Excel
     drop_superseded(session, category)  # la FVCL ya publicó esos resultados
     return len(parsed)

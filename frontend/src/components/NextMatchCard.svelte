@@ -47,6 +47,9 @@
     </div>
   </div>
 
+  {#if match.schedule_override && !mode}
+    <p class="club-note">Horario confirmado por el club</p>
+  {/if}
   {#if match.starts_at && !mode}
     <div class="countdown"><Countdown iso={match.starts_at} /></div>
     <div class="weather"><WeatherChip {match} tone="dark" /></div>
@@ -174,6 +177,13 @@
   .day {
     font-size: 13px;
     opacity: 0.8;
+  }
+  .club-note {
+    margin: -4px 0 10px;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #8ee39c;
   }
   .countdown {
     display: flex;

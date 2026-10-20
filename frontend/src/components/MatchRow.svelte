@@ -62,6 +62,7 @@
           </button>
         {/if}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>
+        {#if match.schedule_override}<span class="club-note">Horario confirmado por el club</span>{/if}
         {#if match.venue}
           <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
             <Icon name="pin" size={14} />
@@ -244,6 +245,11 @@
     .pill.live.on i {
       animation: none;
     }
+  }
+  .club-note {
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--brand-strong);
   }
   .prov-note {
     flex-basis: 100%;

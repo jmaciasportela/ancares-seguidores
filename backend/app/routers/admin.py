@@ -20,7 +20,9 @@ from ..auth import (
 from ..db import get_session
 from ..models import Category, Feedback, Match, ProvisionalResult, Scorer, Standing, SyncLog, Team, competition_order, utcnow
 from ..parsers.common import ParseError, norm
-from ..schemas import BulkIn, CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, MatchIn, ParseIn, ScorerIn, SyncIn
+from ..schemas import (
+    BulkIn, CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, MatchIn, ParseIn, ScheduleIn, ScorerIn, SyncIn,
+)
 from ..serializers import category_admin, iso, provisional_out
 from ..services.fetcher import make_client
 from ..services.importer import import_file, is_ours, sniff_kind
@@ -34,7 +36,7 @@ from ..services.logos import (
     sync_teams_from_standings,
 )
 from ..services.logos_fvcl import search_category_logos
-from ..services import tournament, usage
+from ..services import schedule, tournament, usage
 from ..services.provisional import match_key, provisional_map
 from ..services.mailer import email_status, send_test_email
 from ..services.sync import sync_categories
@@ -532,6 +534,70 @@ def delete_tournament_match(match_id: int, session: Session = Depends(get_sessio
     cat.data_updated_at = utcnow()
     session.commit()
     return {"ok": True}
+
+
+# --- horarios de liga cambiados a mano (mandan sobre el Excel) ---------------------
+
+def _local(dt) -> tuple:
+    if not dt:
+        return None, None
+    local = dt.replace(tzinfo=dt.tzinfo or timezone.utc).astimezone(tournament.TZ)
+    return local.date().isoformat(), local.strftime("%H:%M")
+
+
+def _schedule_out(m: Match) -> dict:
+    date, time = _local(m.starts_at)
+    excel_starts, excel_venue = m.excel_schedule()
+    excel_date, excel_time = _local(excel_starts)
+    return {
+        "id": m.id, "round_no": m.round_no, "round_name": m.round_name, "home": m.home, "away": m.away,
+        "is_ours": m.is_ours, "played": m.home_sets is not None,
+        "date": date, "time": time, "venue": m.venue, "override": bool(m.schedule_override),
+        "excel": {"date": excel_date, "time": excel_time, "venue": excel_venue},
+    }
+
+
+def _league_match(session: Session, match_id: int) -> Match:
+    m = session.get(Match, match_id)
+    if not m or m.is_bye or not m.away:
+        raise HTTPException(status_code=404, detail="Partido no encontrado")
+    if m.category.is_tournament:
+        raise HTTPException(status_code=422, detail="En los torneos, el horario se cambia en «Partidos»")
+    return m
+
+
+@protected.get("/categories/{category_id}/schedule")
+def list_schedule(category_id: int, session: Session = Depends(get_session)):
+    cat = _get_category(session, category_id)
+    if cat.is_tournament:
+        raise HTTPException(status_code=422, detail="En los torneos, el horario se cambia en «Partidos»")
+    return [_schedule_out(m) for m in sorted(cat.matches, key=lambda m: m.order) if not m.is_bye and m.away]
+
+
+@protected.put("/matches/{match_id}/schedule")
+def set_schedule(match_id: int, data: ScheduleIn, session: Session = Depends(get_session)):
+    """Cambia fecha y hora (y, si se indica, el pabellón). Se mantiene aunque se reimporte el Excel."""
+    m = _league_match(session, match_id)
+    if data.time and not data.date:
+        raise HTTPException(status_code=422, detail="Pon también la fecha")
+    try:
+        starts = tournament.starts_at_of(data.date, data.time)
+    except (tournament.TournamentError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if starts is None and not data.venue:
+        raise HTTPException(status_code=422, detail="Indica la nueva fecha y hora, o el pabellón")
+    schedule.set_override(session, m, starts, data.venue)
+    session.commit()
+    return _schedule_out(m)
+
+
+@protected.delete("/matches/{match_id}/schedule")
+def clear_schedule(match_id: int, session: Session = Depends(get_session)):
+    """Vuelve al horario del Excel."""
+    m = _league_match(session, match_id)
+    schedule.clear_override(session, m)
+    session.commit()
+    return _schedule_out(m)
 
 
 @protected.post("/categories/{category_id}/matches/parse")

@@ -93,8 +93,18 @@ class Match(Base):
     raw_teams: Mapped[str] = mapped_column(String(400))
     raw_result: Mapped[Optional[str]] = mapped_column(String(400))
     is_ours: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Horario del Excel de la FVCL; `starts_at`/`venue` son los que valen (el admin puede cambiarlos)
+    excel_starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    excel_venue: Mapped[Optional[str]] = mapped_column(String(200))
+    schedule_override: Mapped[bool] = mapped_column(Boolean, default=False)
 
     category: Mapped[Category] = relationship(back_populates="matches")
+
+    def excel_schedule(self):
+        """(fecha, pabellón) tal y como vienen en el Excel, aunque el admin los haya cambiado."""
+        if self.schedule_override:
+            return self.excel_starts_at, self.excel_venue
+        return self.starts_at, self.venue
 
 
 class Feedback(Base):
@@ -247,6 +257,28 @@ class LiveScore(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # último contacto del principal
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class ScheduleOverride(Base):
+    """Fecha, hora o pabellón cambiados a mano por el admin: mandan sobre el Excel.
+
+    Misma clave natural que los provisionales (los partidos se recrean al
+    importar): se vuelve a aplicar tras cada importación.
+    """
+
+    __tablename__ = "schedule_overrides"
+    __table_args__ = (UniqueConstraint("category_id", "round_no", "home_key", "away_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"), index=True)
+    round_no: Mapped[int] = mapped_column(Integer)
+    home_key: Mapped[str] = mapped_column(String(200))
+    away_key: Mapped[str] = mapped_column(String(200))
+    home: Mapped[str] = mapped_column(String(200))
+    away: Mapped[str] = mapped_column(String(200))
+    starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))  # None: la del Excel
+    venue: Mapped[Optional[str]] = mapped_column(String(200))  # None: el del Excel
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 def competition_order():
     """Ligas siempre antes que torneos; dentro de cada grupo, el orden del admin."""

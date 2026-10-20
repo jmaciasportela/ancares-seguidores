@@ -39,6 +39,7 @@ ADDED_COLUMNS = {
         "points_system": "VARCHAR(10) DEFAULT 'auto'",
     },
     "sync_logs": {"details": "TEXT"},
+    "matches": {"excel_starts_at": "DATETIME", "excel_venue": "VARCHAR(200)", "schedule_override": "BOOLEAN DEFAULT 0"},
 }
 
 

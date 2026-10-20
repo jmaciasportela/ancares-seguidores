@@ -105,6 +105,7 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
         # Marcador en directo: id para el visor y resumen si alguien lo está retransmitiendo
         "live_id": live_id(m) if ours else None,
         "live": live_summary(ctx.live.get(key)) if ours and m.home_sets is None else None,
+        "schedule_override": bool(m.schedule_override),  # horario cambiado a mano por el club
     }
 
 

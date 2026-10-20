@@ -8,6 +8,7 @@
   import { toast } from '../../lib/toast.js';
   import CategoryForm from './CategoryForm.svelte';
   import TournamentMatches from './TournamentMatches.svelte';
+  import ScheduleAdmin from './ScheduleAdmin.svelte';
 
   const STATUS = {
     ok: { label: 'Al día', cls: 'ok' },
@@ -22,6 +23,7 @@
   let creating = $state(false);
   let editing = $state(null);
   let matchesFor = $state(null); // torneo cuyos partidos se editan
+  let scheduleFor = $state(null); // liga cuyos horarios se cambian a mano
   let confirmDelete = $state(null);
   let syncing = $state(null); // id o 'all'
   let uploading = $state(null);
@@ -114,6 +116,8 @@
 
 {#if matchesFor}
   <TournamentMatches category={matchesFor} onBack={() => { matchesFor = null; load(); }} />
+{:else if scheduleFor}
+  <ScheduleAdmin category={scheduleFor} onBack={() => { scheduleFor = null; load(); }} />
 {:else}
 <div class="toolbar">
   <button class="btn primary small" onclick={() => (creating = !creating)}>
@@ -209,6 +213,7 @@
             <Icon name="refresh" size={16} />
             {syncing === cat.id ? '…' : 'Sincronizar'}
           </button>
+          <button class="btn small" onclick={() => (scheduleFor = cat)} disabled={!cat.matches}><Icon name="clock" size={16} /> Horarios</button>
           <button class="btn small" onclick={() => (editing = cat.id)} aria-label="Editar"><Icon name="edit" size={16} /></button>
           <button class="btn small danger" onclick={() => remove(cat.id)} aria-label="Eliminar">
             <Icon name="trash" size={16} />

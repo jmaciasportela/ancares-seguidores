@@ -87,6 +87,19 @@ class PingIn(BaseModel):
     version: Optional[str] = Field(default=None, max_length=20)
 
 
+class ScheduleIn(BaseModel):
+    """Horario de un partido de liga cambiado a mano (vacío: el del Excel)."""
+
+    date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    time: Optional[str] = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    venue: Optional[str] = Field(default=None, max_length=200)
+
+    @field_validator("date", "time", "venue", mode="before")
+    @classmethod
+    def _empty(cls, v):
+        return v.strip() or None if isinstance(v, str) else v
+
+
 class MatchIn(BaseModel):
     """Partido de torneo (a mano)."""
 

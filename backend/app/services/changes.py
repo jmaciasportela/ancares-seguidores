@@ -110,14 +110,16 @@ def diff_calendar(old: Iterable[Match], new: Iterable[MatchRow], is_ours) -> Lis
                 "result_changed",
                 f"{teams}: {_sets(m.home_sets, m.away_sets)} → {_sets(r.home_sets, r.away_sets)}", ours,
             ))
-        # Fecha, hora o pabellón (en un solo cambio si varían a la vez)
+        # Fecha, hora o pabellón (en un solo cambio si varían a la vez). Se compara con
+        # lo que decía el Excel, aunque el admin lo haya cambiado a mano.
+        old_starts, old_venue = m.excel_schedule() if hasattr(m, "excel_schedule") else (m.starts_at, m.venue)
         what = []
-        if _utc(m.starts_at) != _utc(r.starts_at):
-            before, after = _when(m.starts_at), _when(r.starts_at)
+        if _utc(old_starts) != _utc(r.starts_at):
+            before, after = _when(old_starts), _when(r.starts_at)
             same_day = before.rsplit(" ", 1)[0] == after.rsplit(" ", 1)[0]
             what.append(f"{before} → {after.rsplit(' ', 1)[1] if same_day else after}")
-        if (m.venue or "") != (r.venue or ""):
-            what.append(f"pabellón {m.venue or '?'} → {r.venue or '?'}")
+        if (old_venue or "") != (r.venue or ""):
+            what.append(f"pabellón {old_venue or '?'} → {r.venue or '?'}")
         if what:
             changes.append(Change("schedule", f"{teams}: {' · '.join(what)}", ours))
     for key, m in old_map.items():

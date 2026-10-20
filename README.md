@@ -190,6 +190,15 @@ Cuando un anotador (o el admin) empieza a llevar un partido de liga, se **emite 
 - **Cómo funciona:** el anotador manda el estado completo del marcador en cada cambio (un reintento con mala cobertura no descuadra nada) y un latido cada minuto. Los visores lo reciben por WebSocket; si no conecta, consultan cada 5 s. El estado se guarda en la base de datos, así que un reinicio no lo pierde, y se borra a los 2 días.
 - **Resultado:** el directo no cuenta como resultado. Al terminar, el anotador publica el resultado provisional como siempre.
 
+## Horarios cambiados a mano
+
+A veces un partido se juega otro día, a otra hora o en otro pabellón que los del Excel. En **Admin → Categorías → Horarios** (solo ligas) el admin lo cambia, y ese horario **manda siempre**:
+- **Al reimportar:** el horario manual se mantiene aunque se vuelva a importar el Excel. Se guarda aparte, identificado por jornada y equipos, y se vuelve a aplicar después de cada importación.
+- **Cambios de la federación:** la detección de cambios compara con lo que dice el Excel. Si la federación cambia ese partido, el registro lo cuenta, pero el horario del admin sigue mandando. En la lista se ve tachado el horario del Excel para comparar.
+- **Pabellón:** se puede cambiar solo la fecha y la hora, solo el pabellón o todo. El pabellón vacío significa el del Excel.
+- **Volver atrás:** «Volver al del Excel» deshace el cambio.
+- **Para las familias:** se muestra «Horario confirmado por el club». Todo lo que depende de la hora usa el horario del admin: próximo partido, día de partido, ánimos, directo y tiempo.
+
 ## Puntuación y desempates
 
 La clasificación oficial se muestra tal cual la publica la federación. La app solo calcula puntos en la **clasificación provisional**, en la **evolución** de Estadísticas y en los **grupos de los torneos**, y lo hace según la normativa de la FVCL (Normas Generales de Voleibol 2026-27, «Sistema de puntuación»):
