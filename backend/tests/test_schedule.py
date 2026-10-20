@@ -67,6 +67,13 @@ def test_admin_changes_schedule_and_it_survives_imports(client, cat):
     assert public(client, cat)["starts_at"] == "2026-10-18T08:30:00+00:00"
 
 
+def test_return_leg_is_shown(client, cat):
+    """El editor enseña el partido de vuelta contra el mismo rival (por si la FVCL cambió el orden)."""
+    m = colon(client, cat)
+    assert m["twin"]["round_name"] == "Jornada 10" and m["twin"]["home"] == "VCV Colón"
+    assert m["twin"]["date"] == "2027-01-24" and m["round_shift"] is None
+
+
 def test_only_time_or_only_venue(client, cat):
     m = colon(client, cat)
     # Solo el pabellón: la fecha y la hora siguen siendo las del Excel
@@ -97,6 +104,9 @@ def test_validation(client, cat):
     assert client.put(f"/api/admin/matches/{m['id']}/schedule", json={"date": "2026-10-18"}).status_code == 422
     assert client.put(f"/api/admin/matches/{m['id']}/schedule", json={"time": "10:00"}).status_code == 422
     assert client.put(f"/api/admin/matches/{m['id']}/schedule", json={}).status_code == 422
+    # Año equivocado (se coló 2024): fuera de temporada
+    r = client.put(f"/api/admin/matches/{m['id']}/schedule", json={"date": "2024-10-24", "time": "17:00"})
+    assert r.status_code == 422 and "fuera de la temporada" in r.json()["detail"]
     assert client.put("/api/admin/matches/999999/schedule", json={"venue": "X"}).status_code == 404
     t = client.post("/api/admin/categories", json={"name": "Torneo", "kind": "tournament"}).json()
     assert client.get(f"/api/admin/categories/{t['id']}/schedule").status_code == 422

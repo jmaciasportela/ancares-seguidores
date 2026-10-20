@@ -4,7 +4,7 @@
   import TeamBadge from './TeamBadge.svelte';
   import CheerBar from './CheerBar.svelte';
   import WeatherChip from './WeatherChip.svelte';
-  import { directionsUrl, formatDay, formatTime, isToday, liveMode, mapsUrl, shortTeam } from '../lib/format.js';
+  import { directionsUrl, formatDay, formatTime, isToday, liveMode, mapsUrl, roundLabel, shortTeam } from '../lib/format.js';
   import TodayBadge from './TodayBadge.svelte';
   import { pop } from '../lib/motion.js';
   import { go } from '../lib/router.js';
@@ -23,7 +23,7 @@
 <article class="next" class:today id="match-{match.id}">
   <header>
     <span class="label">Próximo partido</span>
-    {#if today || mode}<TodayBadge startsAt={match.starts_at} {live} />{:else}<span class="round">{match.round_name}</span>{/if}
+    {#if today || mode}<TodayBadge startsAt={match.starts_at} {live} />{:else}<span class="round" class:shift={match.round_shift}>{roundLabel(match)}</span>{/if}
   </header>
 
   <div class="teams">
@@ -139,6 +139,10 @@
   }
   .round {
     opacity: 0.7;
+  }
+  .round.shift {
+    opacity: 1;
+    color: #ffcf6e;
   }
   .teams {
     display: grid;

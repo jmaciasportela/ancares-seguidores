@@ -1,7 +1,7 @@
 <script>
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
-  import { formatWhen, isOursName, liveMode, liveText, mapsUrl, ourOutcome, partialsText, scoreOf, shortTeam } from '../lib/format.js';
+  import { formatWhen, isOursName, liveMode, liveText, mapsUrl, ourOutcome, partialsText, roundLabel, scoreOf, shortTeam } from '../lib/format.js';
   import { go } from '../lib/router.js';
   import { matchText } from '../lib/share.js';
   import { openShare } from '../lib/shareSheet.js';
@@ -22,7 +22,7 @@
   </div>
 {:else}
   <article class="row" class:ours={match.is_ours} class:win={outcome === true} class:loss={outcome === false}>
-    {#if showRound}<div class="round">{match.round_name}</div>{/if}
+    {#if showRound}<div class="round">{roundLabel(match)}</div>{/if}
     <div class="line">
       <div class="teams">
         <div class="team" class:won={homeWon}>
@@ -61,6 +61,7 @@
             <i aria-hidden="true"></i> {live === 'live' ? 'En directo' : 'Final'} · {liveText(match.live)}
           </button>
         {/if}
+        {#if match.round_shift && !showRound}<span class="pill shift">{match.round_shift === 'adelantada' ? 'Adelantado' : 'Aplazado'}</span>{/if}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>
         {#if match.schedule_override}<span class="club-note">Horario confirmado por el club</span>{/if}
         {#if match.venue}
@@ -244,6 +245,15 @@
   @media (prefers-reduced-motion: reduce) {
     .pill.live.on i {
       animation: none;
+    }
+  }
+  .pill.shift {
+    background: rgba(242, 165, 22, 0.16);
+    color: #a86a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    .pill.shift {
+      color: #f5b94a;
     }
   }
   .club-note {

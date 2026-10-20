@@ -21,6 +21,15 @@ class Ctx:
     provisional: Dict[Key, ProvisionalResult] = field(default_factory=dict)
     cheers: Dict[Key, Dict[str, int]] = field(default_factory=dict)
     live: Dict[Key, LiveScore] = field(default_factory=dict)
+    _rounds: Dict[int, Dict[int, datetime]] = field(default_factory=dict)
+
+    def rounds_for(self, category: Category) -> Dict[int, datetime]:
+        """Fecha típica de cada jornada de la categoría (se calcula una vez por petición)."""
+        if self is EMPTY:  # el contexto vacío es compartido: sin memoria
+            return round_dates(category.matches)
+        if category.id not in self._rounds:
+            self._rounds[category.id] = round_dates(category.matches)
+        return self._rounds[category.id]
 
     def logo(self, name: Optional[str]) -> Optional[str]:
         return self.logos.get(norm(name)) if name else None
@@ -106,22 +115,60 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
         "live_id": live_id(m) if ours else None,
         "live": live_summary(ctx.live.get(key)) if ours and m.home_sets is None else None,
         "schedule_override": bool(m.schedule_override),  # horario cambiado a mano por el club
+        # «adelantada»/«aplazada» si no se juega con el resto de su jornada (ligas)
+        "round_shift": round_shift(m, ctx.rounds_for(m.category)) if ours and m.category and not m.category.is_tournament else None,
     }
+
+
+SHIFT = timedelta(days=5)  # margen para decir que un partido no se juega con el resto de su jornada
+
+
+def round_dates(matches: List[Match]) -> Dict[int, datetime]:
+    """Fecha típica (mediana) de cada jornada, con los partidos de todos los equipos que ya tienen fecha."""
+    by_round: Dict[int, List[datetime]] = {}
+    for m in matches:
+        if not m.is_bye and m.away and m.starts_at:
+            by_round.setdefault(m.round_no, []).append(_aware(m.starts_at))
+    return {r: sorted(ds)[len(ds) // 2] for r, ds in by_round.items()}
+
+
+def round_shift(m: Match, rounds: Dict[int, datetime], now: Optional[datetime] = None) -> Optional[str]:
+    """«adelantada» o «aplazada» si el partido no se juega cuando el resto de su jornada.
+
+    Pasa, por ejemplo, cuando la federación cambia el orden de las vueltas: el
+    Ancares – AULE de la jornada 11 se juega en octubre y el AULE – Ancares de
+    la jornada 2 queda sin fecha.
+    """
+    typical = rounds.get(m.round_no)
+    if m.is_bye or not m.away or typical is None:
+        return None
+    if m.starts_at:
+        when = _aware(m.starts_at)
+        if when < typical - SHIFT:
+            return "adelantada"
+        if when > typical + SHIFT:
+            return "aplazada"
+        return None
+    if m.home_sets is None and typical < (now or datetime.now(timezone.utc)) - timedelta(days=1):
+        return "aplazada"  # el resto de la jornada ya se jugó y este sigue sin fecha
+    return None
 
 
 def upcoming(matches: List[Match], ctx: Ctx = EMPTY, limit: int = 2, now: Optional[datetime] = None) -> List[Match]:
     """Próximos partidos de Ancares sin jugar (incluye el que se está jugando ahora).
 
-    Los que tienen fecha van por orden de fecha. Los que aún no la tienen (la
-    federación no la ha fijado) se colocan por jornada entre ellos: uno sin fecha
-    de la jornada 2 va antes que otro con fecha de la jornada 11. Un partido con
-    resultado (oficial o provisional) o cuya fecha ya pasó se da por jugado, y los
-    sin fecha de jornadas ya superadas se descartan. Lo que se está retransmitiendo
-    en directo va siempre primero, aunque el Excel diga otro día.
+    Van por fecha. Los que aún no tienen (la federación no la ha fijado) se
+    colocan en la fecha típica de su jornada (la del resto de partidos); si esa
+    fecha ya pasó, están aplazados sin fecha y no se proponen. Si toda la jornada
+    está sin fecha, se colocan por número de jornada entre los demás. Un partido
+    con resultado (oficial o provisional) o cuya fecha ya pasó se da por jugado.
+    Lo que se está retransmitiendo en directo va siempre primero, aunque el
+    Excel diga otro día.
     """
     now = now or datetime.now(timezone.utc)
     recent = now - timedelta(hours=3)
     ours = [m for m in matches if m.is_ours and not m.is_bye]
+    rounds = round_dates(matches)
 
     def on_air(m: Match) -> bool:
         s = live_summary(ctx.live.get(match_key(m)), now) if m.home_sets is None and not ctx.provisional_for(m) else None
@@ -133,15 +180,26 @@ def upcoming(matches: List[Match], ctx: Ctx = EMPTY, limit: int = 2, now: Option
     live_now = [m for m in ours if on_air(m)]
     ours = [m for m in ours if m not in live_now]
     played_round = max((m.round_no for m in ours if played(m)), default=0)
-    pending = [m for m in ours if not played(m)]
-    dated = sorted((m for m in pending if m.starts_at), key=lambda m: _aware(m.starts_at))
-    undated = sorted((m for m in pending if not m.starts_at and m.round_no > played_round), key=lambda m: (m.round_no, m.order))
+    timed: List[tuple] = []  # (fecha o fecha prevista, partido)
+    unknown: List[Match] = []  # sin fecha y sin pista de cuándo
+    for m in ours:
+        if played(m):
+            continue
+        if m.starts_at:
+            timed.append((_aware(m.starts_at), m))
+        elif m.round_no in rounds:
+            if rounds[m.round_no] >= now - timedelta(days=1):
+                timed.append((rounds[m.round_no], m))
+        elif m.round_no > played_round:
+            unknown.append(m)
+    timed.sort(key=lambda t: (t[0], t[1].round_no, t[1].order))
+    unknown.sort(key=lambda m: (m.round_no, m.order))
     out: List[Match] = list(live_now)
-    for d in dated:
-        while undated and undated[0].round_no < d.round_no:
-            out.append(undated.pop(0))
+    for _, d in timed:
+        while unknown and unknown[0].round_no < d.round_no:
+            out.append(unknown.pop(0))
         out.append(d)
-    return (out + undated)[:limit]
+    return (out + unknown)[:limit]
 
 
 def next_match(matches: List[Match], ctx: Ctx = EMPTY, now: Optional[datetime] = None) -> Optional[Match]:

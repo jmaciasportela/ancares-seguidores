@@ -198,6 +198,9 @@ A veces un partido se juega otro día, a otra hora o en otro pabellón que los d
 - **Pabellón:** se puede cambiar solo la fecha y la hora, solo el pabellón o todo. El pabellón vacío significa el del Excel.
 - **Volver atrás:** «Volver al del Excel» deshace el cambio.
 - **Para las familias:** se muestra «Horario confirmado por el club». Todo lo que depende de la hora usa el horario del admin: próximo partido, día de partido, ánimos, directo y tiempo.
+- **Partidos adelantados o aplazados:** si la federación cambia el orden de las vueltas (por ejemplo, el Ancares – AULE de la jornada 11 se juega en octubre y el AULE – Ancares de la jornada 2 queda sin fecha), no hace falta tocar nada. La app lo rotula como «Jornada 11 · adelantada» comparando con la fecha del resto de su jornada. Los partidos sin fecha se esperan para cuando se juega el resto de su jornada; si esa fecha pasa, quedan «aplazados» hasta que la federación les ponga fecha.
+- **Ayuda en el editor:** al cambiar un horario, se ve el partido de vuelta contra el mismo rival y la app avisa si se elige el mismo día. Las fechas fuera de temporada se rechazan.
+- **El local no se cambia a mano:** el resultado oficial llega con el local y el visitante de la federación, y cambiarlos rompería esa relación. Cuando cambian las vueltas, el partido que se juega ya figura con su local en la otra jornada.
 
 ## Puntuación y desempates
 

@@ -1,5 +1,5 @@
 import re
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import PurePath
 from typing import List, Optional
 
@@ -23,7 +23,7 @@ from ..parsers.common import ParseError, norm
 from ..schemas import (
     BulkIn, CategoryIn, FeedbackPatch, LoginIn, LogoSearchIn, LogoUrlIn, MatchIn, ParseIn, ScheduleIn, ScorerIn, SyncIn,
 )
-from ..serializers import category_admin, iso, provisional_out
+from ..serializers import category_admin, iso, provisional_out, round_dates, round_shift
 from ..services.fetcher import make_client
 from ..services.importer import import_file, is_ours, sniff_kind
 from ..services.logos import (
@@ -549,11 +549,22 @@ def _schedule_out(m: Match) -> dict:
     date, time = _local(m.starts_at)
     excel_starts, excel_venue = m.excel_schedule()
     excel_date, excel_time = _local(excel_starts)
+    # El partido de vuelta contra el mismo rival: si la federación cambia el orden de
+    # las vueltas, el que se juega en la fecha nueva suele ser ese (con el otro de local)
+    twin = next((o for o in m.category.matches if not o.is_bye and o.away and o.id != m.id
+                 and norm(o.home) == norm(m.away) and norm(o.away) == norm(m.home)), None)
+    twin_out = None
+    if twin:
+        tdate, ttime = _local(twin.starts_at)
+        twin_out = {"round_name": twin.round_name, "home": twin.home, "away": twin.away,
+                    "date": tdate, "time": ttime, "venue": twin.venue, "played": twin.home_sets is not None}
     return {
         "id": m.id, "round_no": m.round_no, "round_name": m.round_name, "home": m.home, "away": m.away,
         "is_ours": m.is_ours, "played": m.home_sets is not None,
         "date": date, "time": time, "venue": m.venue, "override": bool(m.schedule_override),
         "excel": {"date": excel_date, "time": excel_time, "venue": excel_venue},
+        "round_shift": round_shift(m, round_dates(m.category.matches)),
+        "twin": twin_out,
     }
 
 
@@ -584,6 +595,9 @@ def set_schedule(match_id: int, data: ScheduleIn, session: Session = Depends(get
         starts = tournament.starts_at_of(data.date, data.time)
     except (tournament.TournamentError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    now = datetime.now(timezone.utc)
+    if starts and not now - timedelta(days=180) <= starts <= now + timedelta(days=400):
+        raise HTTPException(status_code=422, detail=f"Revisa la fecha ({data.date}): queda fuera de la temporada")
     if starts is None and not data.venue:
         raise HTTPException(status_code=422, detail="Indica la nueva fecha y hora, o el pabellón")
     schedule.set_override(session, m, starts, data.venue)

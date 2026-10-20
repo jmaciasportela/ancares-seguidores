@@ -93,6 +93,11 @@ export function liveText(live) {
   return `Set ${live.set_no}: ${live.current[0]}-${live.current[1]}${h || a ? ` · sets ${h}-${a}` : ''}`;
 }
 
+/** «Jornada 11 · adelantada» si no se juega con el resto de su jornada (p. ej. la FVCL cambió el orden de las vueltas). */
+export function roundLabel(m) {
+  return m.round_shift ? `${m.round_name} · ${m.round_shift}` : m.round_name;
+}
+
 /** "en 3 h", "en 25 min" */
 export function timeUntil(iso, now = Date.now()) {
   const min = Math.max(0, Math.round((new Date(iso).getTime() - now) / 60000));

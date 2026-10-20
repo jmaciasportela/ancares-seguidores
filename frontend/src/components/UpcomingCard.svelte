@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte';
   import TeamBadge from './TeamBadge.svelte';
   import WeatherChip from './WeatherChip.svelte';
-  import { directionsUrl, formatDay, formatTime, isOursName, isToday, liveMode, mapsUrl, shortTeam } from '../lib/format.js';
+  import { directionsUrl, formatDay, formatTime, isOursName, isToday, liveMode, mapsUrl, roundLabel, shortTeam } from '../lib/format.js';
   import { go } from '../lib/router.js';
   import TodayBadge from './TodayBadge.svelte';
 
@@ -15,7 +15,7 @@
 <article class="upcoming" class:today id="match-{match.id}">
   <header>
     <span class="label">Siguiente partido</span>
-    {#if today || mode}<TodayBadge startsAt={match.starts_at} live={match.live} />{:else}<span class="round">{match.round_name}</span>{/if}
+    {#if today || mode}<TodayBadge startsAt={match.starts_at} live={match.live} />{:else}<span class="round" class:shift={match.round_shift}>{roundLabel(match)}</span>{/if}
   </header>
 
   <div class="teams">
@@ -126,6 +126,9 @@
   }
   .round {
     color: var(--muted);
+  }
+  .round.shift {
+    color: var(--warn, #b7791f);
   }
   .teams {
     display: grid;

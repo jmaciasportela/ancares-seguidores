@@ -1,18 +1,23 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.serializers import Ctx, upcoming
+from app.serializers import Ctx, round_dates, round_shift, upcoming
 from app.services.live import live_id_of
 from app.services.provisional import match_key
 
 NOW = datetime(2026, 10, 17, 10, 0, tzinfo=timezone.utc)
 
 
-def m(round_no, days=None, *, home="CDF Voleibol Ancares UVa", away="Rival", sets=None, bye=False, order=None):
+def m(round_no, days=None, *, home="CDF Voleibol Ancares UVa", away="Rival", sets=None, bye=False, order=None, ours=True):
     return SimpleNamespace(
-        category_id=1, round_no=round_no, order=order or round_no * 10, home=home, away=away, is_ours=True, is_bye=bye,
+        category_id=1, round_no=round_no, order=order or round_no * 10, home=home, away=away, is_ours=ours, is_bye=bye,
         home_sets=sets, starts_at=NOW + timedelta(days=days) if days is not None else None,
     )
+
+
+def other(round_no, days):
+    """Partido de otros equipos (da la fecha típica de la jornada)."""
+    return m(round_no, days, home="X", away="Y", ours=False, order=round_no * 10 + 5)
 
 
 def rounds(matches):
@@ -58,3 +63,25 @@ def test_live_match_goes_first_even_if_excel_date_passed():
     assert [x.round_no for x in upcoming([postponed, m(4, 2), m(5, 9)], ctx, limit=5, now=NOW)] == [3, 4, 5]
     # Sin directo, el partido de fecha pasada se da por jugado
     assert rounds([postponed, m(4, 2), m(5, 9)]) == [4, 5]
+
+
+def test_swapped_legs():
+    """La FVCL cambia el orden de las vueltas: la jornada 11 (en casa) se juega en octubre y la 2 queda sin fecha."""
+    j2 = m(2, home="AULE", away="CDF Voleibol Ancares UVa")  # sin fecha
+    j11 = m(11, 7, away="AULE")  # adelantada: el resto de la jornada 11 es en febrero
+    season = [m(1, -1, sets=3), other(1, -1), other(2, 8), other(2, 8), j2, j11, other(11, 120), m(3, 21), other(3, 21)]
+    # Primero el del sábado (jornada 11) y después la jornada 2, prevista para cuando el resto de su jornada
+    assert rounds(season) == [11, 2, 3]
+    rd = round_dates(season)
+    assert round_shift(j11, rd, NOW) == "adelantada" and round_shift(j2, rd, NOW) is None
+    # Pasada la fecha del resto de la jornada 2 sin fijarse la suya: aplazada y fuera de los próximos
+    later = NOW + timedelta(days=10)
+    assert round_shift(j2, rd, later) == "aplazada"
+    assert [x.round_no for x in upcoming(season, limit=5, now=later)] == [3]
+
+
+def test_round_shift_postponed_with_date():
+    j3 = m(3, 40)
+    season = [j3, other(3, 14), other(3, 14), m(4, 21), other(4, 21)]
+    assert round_shift(j3, round_dates(season), NOW) == "aplazada"
+    assert rounds(season) == [4, 3]

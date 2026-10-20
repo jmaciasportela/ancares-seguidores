@@ -113,6 +113,7 @@
           <div class="when">
             <b>{when(m)}</b>
             <span class="muted small ellipsis">{m.venue || 'Pabellón por confirmar'}</span>
+            {#if m.round_shift}<span class="tag warn">{m.round_shift === 'adelantada' ? 'Adelantado' : 'Aplazado'} respecto a su jornada</span>{/if}
             {#if m.override}
               <span class="tag">Cambiado a mano</span>
               <span class="muted small excel">Excel: {when(m.excel)}{m.excel.venue && m.excel.venue !== m.venue ? ` · ${m.excel.venue}` : ''}</span>
@@ -128,6 +129,17 @@
               <label class="field"><span>Fecha</span><input class="input" type="date" bind:value={form.date} /></label>
               <label class="field"><span>Hora</span><input class="input" type="time" bind:value={form.time} /></label>
             </div>
+            {#if m.twin}
+              <p class="twin small">
+                Partido de vuelta ({m.twin.round_name}, {shortTeam(m.twin.home)} de local): <b>{when(m.twin)}</b>{m.twin.venue ? ` · ${m.twin.venue}` : ''}{m.twin.played ? ' · ya jugado' : ''}
+              </p>
+              {#if form.date && form.date === m.twin.date}
+                <p class="warn-box small">
+                  ⚠️ Ese día ya está en el Excel la {m.twin.round_name.toLowerCase()} contra el mismo rival, con {shortTeam(m.twin.home)} de local. Seguramente
+                  la federación ha cambiado el orden de las vueltas: ese es el partido que se juega y no hace falta cambiar este.
+                </p>
+              {/if}
+            {/if}
             <label class="field">
               <span>Pabellón <span class="muted">(vacío: el del Excel{m.excel.venue ? `, ${m.excel.venue}` : ''})</span></span>
               <input class="input" list="venues" bind:value={form.venue} maxlength="200" placeholder={m.excel.venue || 'Pabellón'} />
@@ -235,6 +247,22 @@
   }
   .excel {
     text-decoration: line-through;
+  }
+  .tag.warn {
+    background: rgba(242, 165, 22, 0.16);
+    color: #a86a00;
+  }
+  .twin {
+    margin: 0;
+    color: var(--muted);
+  }
+  .warn-box {
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(242, 165, 22, 0.14);
+    color: var(--text);
+    line-height: 1.4;
   }
   .edit {
     width: 36px;
