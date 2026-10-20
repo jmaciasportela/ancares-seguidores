@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.serializers import Ctx, round_dates, round_shift, upcoming
+from app.serializers import Ctx, expected_at, round_dates, round_shift, swapped_with, upcoming
 from app.services.live import live_id_of
 from app.services.provisional import match_key
 
@@ -70,13 +70,24 @@ def test_swapped_legs():
     j2 = m(2, home="AULE", away="CDF Voleibol Ancares UVa")  # sin fecha
     j11 = m(11, 7, away="AULE")  # adelantada: el resto de la jornada 11 es en febrero
     season = [m(1, -1, sets=3), other(1, -1), other(2, 8), other(2, 8), j2, j11, other(11, 120), m(3, 21), other(3, 21)]
-    # Primero el del sábado (jornada 11) y después la jornada 2, prevista para cuando el resto de su jornada
-    assert rounds(season) == [11, 2, 3]
+    # Primero el del sábado (jornada 11); la 2 pasa al hueco de la 11 (febrero), así que después va la 3
+    assert rounds(season) == [11, 3, 2]
     rd = round_dates(season)
-    assert round_shift(j11, rd, NOW) == "adelantada" and round_shift(j2, rd, NOW) is None
-    # Pasada la fecha del resto de la jornada 2 sin fijarse la suya: aplazada y fuera de los próximos
+    assert round_shift(j11, rd, NOW, season) == "adelantada" and round_shift(j2, rd, NOW, season) == "aplazada"
+    assert swapped_with(j2, season, rd) is j11 and expected_at(j2, season, rd) == NOW + timedelta(days=120)
+    # Jugado ya el del sábado, la jornada 2 sigue esperándose en febrero (no desaparece)
     later = NOW + timedelta(days=10)
-    assert round_shift(j2, rd, later) == "aplazada"
+    assert [x.round_no for x in upcoming(season, limit=5, now=later)] == [3, 2]
+
+
+def test_undated_without_swap_waits_for_its_round():
+    """Sin cambio de vueltas, un partido sin fecha se espera con el resto de su jornada."""
+    j2 = m(2, away="AULE")
+    season = [m(1, -1, sets=3), other(2, 8), other(2, 8), j2, m(3, 21), other(3, 21)]
+    rd = round_dates(season)
+    assert rounds(season) == [2, 3] and round_shift(j2, rd, NOW, season) is None
+    later = NOW + timedelta(days=10)
+    assert round_shift(j2, rd, later, season) == "aplazada"
     assert [x.round_no for x in upcoming(season, limit=5, now=later)] == [3]
 
 

@@ -90,6 +90,9 @@ def provisional_out(p: ProvisionalResult) -> dict:
 def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
     prov = ctx.provisional_for(m)
     ours = m.is_ours and not m.is_bye
+    league = ours and m.category is not None and not m.category.is_tournament
+    rounds = ctx.rounds_for(m.category) if league else {}
+    twin = swapped_with(m, m.category.matches, rounds) if league else None
     key = match_key(m)
     return {
         "id": m.id,
@@ -116,7 +119,9 @@ def match_out(m: Match, ctx: Ctx = EMPTY) -> dict:
         "live": live_summary(ctx.live.get(key)) if ours and m.home_sets is None else None,
         "schedule_override": bool(m.schedule_override),  # horario cambiado a mano por el club
         # «adelantada»/«aplazada» si no se juega con el resto de su jornada (ligas)
-        "round_shift": round_shift(m, ctx.rounds_for(m.category)) if ours and m.category and not m.category.is_tournament else None,
+        "round_shift": ("aplazada" if twin else round_shift(m, rounds)) if league else None,
+        # Cambio de orden de vueltas: «Jornada 11» si este partido pasa al hueco de esa jornada
+        "swap_round": twin.round_name if twin else None,
     }
 
 
@@ -132,16 +137,45 @@ def round_dates(matches: List[Match]) -> Dict[int, datetime]:
     return {r: sorted(ds)[len(ds) // 2] for r, ds in by_round.items()}
 
 
-def round_shift(m: Match, rounds: Dict[int, datetime], now: Optional[datetime] = None) -> Optional[str]:
+def swapped_with(m: Match, matches: List[Match], rounds: Dict[int, datetime]) -> Optional[Match]:
+    """Partido de vuelta que se juega en la fecha de esta jornada (la FVCL cambió el orden de las vueltas).
+
+    Ejemplo: el Ancares – AULE de la jornada 11 se juega en la fecha de la
+    jornada 2, y el AULE – Ancares de la jornada 2 queda sin fecha: pasa al
+    hueco de la jornada 11.
+    """
+    typical = rounds.get(m.round_no)
+    if m.starts_at or m.is_bye or not m.away or typical is None:
+        return None
+    for o in matches:
+        if (o is not m and not o.is_bye and o.away and o.starts_at and o.round_no in rounds
+                and norm(o.home) == norm(m.away) and norm(o.away) == norm(m.home)
+                and abs(_aware(o.starts_at) - typical) <= SHIFT):
+            return o
+    return None
+
+
+def expected_at(m: Match, matches: List[Match], rounds: Dict[int, datetime]) -> Optional[datetime]:
+    """Cuándo se espera un partido: su fecha o, si aún no tiene, la de su jornada (o la de la vuelta si se cambiaron)."""
+    if m.starts_at:
+        return _aware(m.starts_at)
+    twin = swapped_with(m, matches, rounds)
+    return rounds[twin.round_no] if twin else rounds.get(m.round_no)
+
+
+def round_shift(m: Match, rounds: Dict[int, datetime], now: Optional[datetime] = None,
+                matches: Optional[List[Match]] = None) -> Optional[str]:
     """«adelantada» o «aplazada» si el partido no se juega cuando el resto de su jornada.
 
     Pasa, por ejemplo, cuando la federación cambia el orden de las vueltas: el
-    Ancares – AULE de la jornada 11 se juega en octubre y el AULE – Ancares de
-    la jornada 2 queda sin fecha.
+    Ancares – AULE de la jornada 11 se juega en octubre (adelantada) y el AULE –
+    Ancares de la jornada 2 pasa al hueco de la 11 (aplazada).
     """
     typical = rounds.get(m.round_no)
     if m.is_bye or not m.away or typical is None:
         return None
+    if not m.starts_at and matches is not None and swapped_with(m, matches, rounds):
+        return "aplazada"
     if m.starts_at:
         when = _aware(m.starts_at)
         if when < typical - SHIFT:
@@ -158,7 +192,8 @@ def upcoming(matches: List[Match], ctx: Ctx = EMPTY, limit: int = 2, now: Option
     """Próximos partidos de Ancares sin jugar (incluye el que se está jugando ahora).
 
     Van por fecha. Los que aún no tienen (la federación no la ha fijado) se
-    colocan en la fecha típica de su jornada (la del resto de partidos); si esa
+    colocan en la fecha típica de su jornada (la del resto de partidos) o, si la
+    FVCL cambió el orden de las vueltas, en la de la jornada de la vuelta; si esa
     fecha ya pasó, están aplazados sin fecha y no se proponen. Si toda la jornada
     está sin fecha, se colocan por número de jornada entre los demás. Un partido
     con resultado (oficial o provisional) o cuya fecha ya pasó se da por jugado.
@@ -188,8 +223,11 @@ def upcoming(matches: List[Match], ctx: Ctx = EMPTY, limit: int = 2, now: Option
         if m.starts_at:
             timed.append((_aware(m.starts_at), m))
         elif m.round_no in rounds:
-            if rounds[m.round_no] >= now - timedelta(days=1):
-                timed.append((rounds[m.round_no], m))
+            # Sin fecha: cuando el resto de su jornada o, si se cambió el orden de las
+            # vueltas, en el hueco de la vuelta. Si esa fecha ya pasó, aplazado sin fecha.
+            when = expected_at(m, matches, rounds)
+            if when >= now - timedelta(days=1):
+                timed.append((when, m))
         elif m.round_no > played_round:
             unknown.append(m)
     timed.sort(key=lambda t: (t[0], t[1].round_no, t[1].order))

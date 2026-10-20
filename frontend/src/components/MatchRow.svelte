@@ -64,6 +64,7 @@
         {#if match.round_shift && !showRound}<span class="pill shift">{match.round_shift === 'adelantada' ? 'Adelantado' : 'Aplazado'}</span>{/if}
         <span class="when"><Icon name="clock" size={14} /> {formatWhen(match.starts_at)}</span>
         {#if match.schedule_override}<span class="club-note">Horario confirmado por el club</span>{/if}
+        {#if match.swap_round}<span class="swap-note">Cambio de vueltas: se jugará en la fecha de la {match.swap_round.toLowerCase()}</span>{/if}
         {#if match.venue}
           <a class="venue" href={mapsUrl(match.venue)} target="_blank" rel="noopener">
             <Icon name="pin" size={14} />
@@ -255,6 +256,11 @@
     .pill.shift {
       color: #f5b94a;
     }
+  }
+  .swap-note {
+    flex-basis: 100%;
+    font-size: 12px;
+    font-style: italic;
   }
   .club-note {
     font-size: 12px;

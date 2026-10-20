@@ -563,7 +563,7 @@ def _schedule_out(m: Match) -> dict:
         "is_ours": m.is_ours, "played": m.home_sets is not None,
         "date": date, "time": time, "venue": m.venue, "override": bool(m.schedule_override),
         "excel": {"date": excel_date, "time": excel_time, "venue": excel_venue},
-        "round_shift": round_shift(m, round_dates(m.category.matches)),
+        "round_shift": round_shift(m, round_dates(m.category.matches), matches=m.category.matches),
         "twin": twin_out,
     }
 

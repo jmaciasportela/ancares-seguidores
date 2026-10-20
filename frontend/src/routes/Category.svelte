@@ -108,11 +108,16 @@
     }
     return [...map.values()].sort((a, b) => a.no - b.no);
   });
+  // Jornada «Próxima»: la del próximo partido de Ancares (puede ir adelantada) o, viendo
+  // todos los partidos, la del más cercano por fecha
   const nextRound = $derived.by(() => {
+    if (onlyOurs && data?.next_match) return data.next_match.round_no;
     const now = Date.now() - 3 * 3600e3;
-    const pending = matches.filter((m) => !m.is_bye && !m.played && !m.provisional);
-    const upcoming = pending.find((m) => m.starts_at && new Date(m.starts_at).getTime() >= now);
-    return (upcoming || pending[0])?.round_no ?? null;
+    const pending = visible.filter((m) => !m.is_bye && !m.played && !m.provisional);
+    const soonest = pending
+      .filter((m) => m.starts_at && new Date(m.starts_at).getTime() >= now)
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+    return (soonest || pending[0])?.round_no ?? null;
   });
   const played = $derived(
     visible.filter((m) => m.played || m.provisional).sort((a, b) => b.round_no - a.round_no || (b.starts_at || '').localeCompare(a.starts_at || '')),
