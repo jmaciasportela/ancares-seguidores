@@ -87,16 +87,18 @@ def daily_job() -> None:
     failed = [r for r in report if r["status"] in ("blocked", "error")]
     if failed and _last_blocked_email != date.today():
         settings = get_settings()
-        lines = [
-            "No se han podido descargar automáticamente estos ficheros de la FVCL.",
-            "Ábrelos desde el móvil y compártelos con la app (o súbelos en el panel de admin):",
-            "",
-        ]
+        blocked = [r for r in failed if r["status"] == "blocked"]
+        lines = ["No se han podido descargar automáticamente estos ficheros de la FVCL:", ""]
         for r in failed:
             lines.append(f"• {r['category']} ({'clasificación' if r['kind'] == 'ranking' else 'calendario'}): {r.get('url', '')}")
             lines.append(f"  Motivo: {r['message']}")
+        if blocked:
+            lines += ["", "Los bloqueados: ábrelos desde el móvil y compártelos con la app (o súbelos en el panel de admin)."]
+        if len(blocked) < len(failed):
+            lines += ["", "Los que fallan por un error de la web de la federación se reintentan solos en la próxima sincronización."]
         lines += ["", f"Panel de admin: {settings.public_url}/#/admin"]
-        send_admin_email("Hay ficheros pendientes de subir", "\n".join(lines))
+        subject = "Hay ficheros pendientes de subir" if blocked else "La web de la federación está fallando"
+        send_admin_email(subject, "\n".join(lines))
         _last_blocked_email = date.today()
     log.info("Sincronización programada terminada: %s", report)
 

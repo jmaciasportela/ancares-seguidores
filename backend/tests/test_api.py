@@ -92,6 +92,21 @@ def test_fetcher_detects_block(monkeypatch):
     assert not res.ok and res.blocked
 
 
+def test_fetcher_tells_server_error_from_block(monkeypatch):
+    """La web de la FVCL a veces devuelve un error de PHP (visto en octubre de 2026 en todas las clasificaciones)."""
+    import httpx
+
+    page = "<link href='x.css'>\nFatal error: Uncaught exception 'ErrorException' with message 'hash_file(...)'"
+
+    def handler(request):
+        return httpx.Response(200, headers={"content-type": "text/html; charset=UTF-8"}, text=page)
+
+    real_client = httpx.Client
+    monkeypatch.setattr(fetcher.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+    res = fetcher.fetch_xls("https://fvcl.es/x")
+    assert not res.ok and not res.blocked and "error al generar el fichero" in res.message
+
+
 def test_feedback(client):
     r = client.post("/api/feedback", json={"kind": "mejora", "message": "¡Gracias por la app!"})
     assert r.status_code == 201

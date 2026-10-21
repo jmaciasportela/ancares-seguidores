@@ -57,6 +57,16 @@ def _blocked(resp: httpx.Response, reason: str) -> FetchResult:
     return FetchResult(ok=False, blocked=True, message=f"HTTP {resp.status_code} ({content_type}): {reason}")
 
 
+SERVER_ERROR_MARKS = (b"Fatal error", b"Uncaught exception", b"Whoops, looks like something went wrong")
+SERVER_ERROR_MESSAGE = ("La web de la federación da un error al generar el fichero (fallo de su servidor, "
+                        "no es un bloqueo). Se reintentará en la próxima sincronización")
+
+
+def server_error(resp: httpx.Response) -> bool:
+    """Página de error de la web de la FVCL (PHP/Laravel), que no es el reto anti-bots."""
+    return resp.status_code >= 500 and resp.status_code != 503 or any(mark in resp.content[:20000] for mark in SERVER_ERROR_MARKS)
+
+
 def fetch_xls(url: str, client: Optional[httpx.Client] = None, validators: Optional[dict] = None) -> FetchResult:
     return fetch(url, client, accept=lambda r: looks_like_xls(r.content), what="un Excel", validators=validators)
 
@@ -91,7 +101,7 @@ def _fetch(client: httpx.Client, url: str, accept: Callable[[httpx.Response], bo
 
     def good(r: httpx.Response) -> bool:
         # La página del reto también es HTML: nunca cuenta como respuesta válida
-        return r.status_code == 200 and accept(r) and parse_challenge(r.content) is None
+        return r.status_code == 200 and accept(r) and parse_challenge(r.content) is None and not server_error(r)
 
     resp = client.get(url, headers=cond)
     if nm := not_modified(resp):
@@ -100,6 +110,8 @@ def _fetch(client: httpx.Client, url: str, accept: Callable[[httpx.Response], bo
         return FetchResult(ok=True, data=resp.content, validators=_validators_of(resp))
 
     challenge = parse_challenge(resp.content) if resp.status_code in (200, 429) else None
+    if challenge is None and server_error(resp):
+        return FetchResult(ok=False, message=f"HTTP {resp.status_code}: {SERVER_ERROR_MESSAGE}")
     if challenge is None:
         blocked = resp.status_code in (403, 429, 503) or "text/html" in resp.headers.get("content-type", "")
         reason = "protección anti-bots de la federación" if blocked else "respuesta inesperada"
@@ -124,4 +136,6 @@ def _fetch(client: httpx.Client, url: str, accept: Callable[[httpx.Response], bo
         return FetchResult(ok=True, data=resp.content, validators=_validators_of(resp))
     if parse_challenge(resp.content):
         return _blocked(resp, "la federación sigue mostrando el reto tras validarlo")
+    if server_error(resp):
+        return FetchResult(ok=False, message=f"HTTP {resp.status_code}: {SERVER_ERROR_MESSAGE}")
     return _blocked(resp, f"la respuesta no es {what}")
