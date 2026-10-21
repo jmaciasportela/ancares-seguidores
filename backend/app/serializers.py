@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
@@ -6,7 +7,7 @@ from .models import Category, LiveScore, Match, ProvisionalResult, Standing
 from .parsers.common import norm
 from .scoring_format import format_of
 from .services.cheers import summary as cheer_summary
-from .services.stats import points_system
+from .services.stats import missing_from_table, points_system, updated_table
 from .services.live import live_id, summary as live_summary
 from .services.provisional import Key, match_key
 
@@ -253,8 +254,21 @@ def last_result(matches: List[Match], ctx: Ctx = EMPTY) -> Optional[Match]:
     return max(played, key=lambda m: (m.round_no, _aware(m.starts_at) or datetime.min.replace(tzinfo=timezone.utc), m.order))
 
 
+def _updated(c: Category) -> Optional[List[dict]]:
+    """Clasificación con los resultados oficiales que la FVCL aún no ha sumado (o None si está al día)."""
+    if c.is_tournament:
+        return None
+    ours = next((norm(s.team) for s in c.standings if s.is_ours), None)
+    return updated_table(c, ours)
+
+
 def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
     ours = next((s for s in c.standings if s.is_ours), None)
+    updated = _updated(c)
+    if updated and ours:  # la posición de Ancares, con los resultados que la FVCL aún no ha sumado
+        row = next((r for r in updated if r["is_ours"]), None)
+        if row:
+            ours = SimpleNamespace(team=ours.team, position=row["position"], points=row["points"])
     coming = upcoming(c.matches, ctx, 2)
     nm = coming[0] if coming else None
     am = coming[1] if len(coming) > 1 else None
@@ -281,6 +295,19 @@ def category_summary(c: Category, ctx: Ctx = EMPTY) -> dict:
 def category_detail(c: Category, ctx: Ctx = EMPTY) -> dict:
     data = category_summary(c, ctx)
     data["standings"] = [standing_out(s, ctx) for s in c.standings]
+    updated = _updated(c)
+    if updated:
+        for row in updated:
+            row["logo"] = ctx.logo(row["team"])
+        missing = missing_from_table(c)
+        data["standings_updated"] = updated
+        data["standings_missing"] = {
+            "results": len(missing),
+            "rounds": list(dict.fromkeys(r.round_name for r in missing)),
+        }
+    else:
+        data["standings_updated"] = None
+        data["standings_missing"] = None
     data["matches"] = [match_out(m, ctx) for m in c.matches]
     if c.is_tournament:
         from .services.tournament import group_tables

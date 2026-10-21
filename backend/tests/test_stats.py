@@ -106,15 +106,16 @@ def test_provisional_table(client, league):
     table = data["provisional_table"]
     assert table is not None
     ours = next(row for row in table if row["is_ours"])
-    # La tabla oficial de muestra está a cero: el 3-0 provisional pone a Ancares primero
-    assert ours["position"] == 1 and ours["points"] == 2 and ours["delta"] == 4  # 2 por ganar en Infantil
-    # En 2-1-0 el que pierde también suma: Maristas Burgos A, con 1 punto, pasa a ser segundo.
-    # El resto conserva el orden oficial entre sí
+    # La tabla oficial de muestra está a cero, pero el calendario ya trae las jornadas 1 y 2: la app suma
+    # esos resultados oficiales (dos victorias, 4 puntos en Infantil) y encima el 3-0 provisional (2 más)
+    assert ours["position"] == 1 and ours["points"] == 6
+    detail = client.get("/api/categories/infantil").json()
+    updated = {r["team"]: r for r in detail["standings_updated"]}
+    assert updated["CDF Voleibol Ancares UVa"]["points"] == 4
+    assert detail["standings_missing"]["rounds"] == ["Jornada 1", "Jornada 2"]
+    # En 2-1-0 el que pierde también suma: Maristas Burgos A, 1 punto más que en la tabla actualizada
     rows = {row["team"]: row for row in table}
-    assert rows["Maristas Burgos A"]["points"] == 1 and rows["Maristas Burgos A"]["position"] == 2
-    rest = [row["team"] for row in table if row["points"] == 0]
-    official = [st["team"] for st in client.get("/api/categories/infantil").json()["standings"]]
-    assert rest == [t for t in official if t in rest]
+    assert rows["Maristas Burgos A"]["points"] == updated["Maristas Burgos A"]["points"] + 1
     assert data["ours"]["has_provisional"] is True
     assert data["ours"]["streak"][-1] == {"round_name": "Jornada 3", "rival": "Maristas Burgos A",
                                           "result": "W", "score": "3-0", "provisional": True}

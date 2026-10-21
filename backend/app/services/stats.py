@@ -343,28 +343,25 @@ def not_yet_counted(category: Category, pending: List[Result]) -> List[Result]:
     return keep
 
 
-def provisional_table(category: Category, ours_key: Optional[str], provisional_for) -> Optional[List[dict]]:
-    """Tabla oficial + resultados provisionales aún no confirmados, reordenada."""
-    pending = [r for r in collect_results(category, provisional_for, True) if r.provisional]
-    pending = not_yet_counted(category, pending)
-    if not pending:
-        return None
-    rule = points_rule(category)
-    rows: Dict[str, Row] = {}
-    for s in category.standings:
-        rows[norm(s.team)] = Row(
+def _official_rows(category: Category, ours_key: Optional[str]) -> Dict[str, Row]:
+    return {
+        norm(s.team): Row(
             team=s.team, played=s.played, won=s.won, lost=s.lost, points=s.points,
             sets_for=s.sets_for, sets_against=s.sets_against, points_for=s.points_for,
             points_against=s.points_against, is_ours=norm(s.team) == ours_key, official_position=s.position,
         )
-    for r in pending:
+        for s in category.standings
+    }
+
+
+def _apply_all(rows: Dict[str, Row], results: Iterable[Result], rule: PointsRule) -> None:
+    for r in results:
         for name in (r.home, r.away):
             if norm(name) in rows:
                 rows[norm(name)].apply(r, rule)
-    # A igualdad de puntos se respeta el orden oficial: así solo se mueve quien
-    # suma puntos (y a quien adelanta), sin aplicar desempates que pueden no ser
-    # exactamente los de la federación.
-    table = sorted(rows.values(), key=lambda row: (-row.points, row.official_position or 999, norm(row.team)))
+
+
+def _table_out(table: List[Row]) -> List[dict]:
     return [
         {
             "position": pos,
@@ -380,6 +377,70 @@ def provisional_table(category: Category, ours_key: Optional[str], provisional_f
         }
         for pos, row in enumerate(table, start=1)
     ]
+
+
+def missing_from_table(category: Category) -> List[Result]:
+    """Resultados oficiales del calendario que la clasificación de la FVCL aún no cuenta.
+
+    Pasa si la federación publica los resultados pero no actualiza su
+    clasificación (en octubre de 2026 su web daba error en todas). Se nota
+    porque un equipo tiene más resultados oficiales en el calendario que
+    partidos jugados en la tabla; los que faltan son los más recientes.
+    """
+    if not category.standings:
+        return []
+    results = collect_results(category, lambda m: None, include_provisional=False)
+    counts = Counter()
+    for r in results:
+        counts[norm(r.home)] += 1
+        counts[norm(r.away)] += 1
+    pending = {norm(s.team): counts[norm(s.team)] - s.played for s in category.standings}
+    if not any(v > 0 for v in pending.values()):
+        return []
+    out = []
+    for r in reversed(results):
+        h, a = norm(r.home), norm(r.away)
+        if pending.get(h, 0) > 0 and pending.get(a, 0) > 0:
+            pending[h] -= 1
+            pending[a] -= 1
+            out.append(r)
+    return list(reversed(out))
+
+
+def updated_table(category: Category, ours_key: Optional[str]) -> Optional[List[dict]]:
+    """Clasificación oficial + los resultados oficiales que la FVCL aún no ha sumado.
+
+    Se parte de la tabla de la federación (así se respetan sus ajustes, como una
+    sanción) y se suman con la puntuación de la normativa. Orden de la RFEVB:
+    puntos, victorias, cociente de sets y de puntos; si todo empata, el oficial.
+    """
+    missing = missing_from_table(category)
+    if not missing:
+        return None
+    rows = _official_rows(category, ours_key)
+    _apply_all(rows, missing, points_rule(category))
+    table = sorted(rows.values(), key=lambda row: (
+        -row.points, -row.won, -_ratio(row.sets_for, row.sets_against),
+        -_ratio(row.points_for, row.points_against), row.official_position or 999, norm(row.team),
+    ))
+    return _table_out(table)
+
+
+def provisional_table(category: Category, ours_key: Optional[str], provisional_for) -> Optional[List[dict]]:
+    """Tabla oficial (más lo que la FVCL aún no haya sumado) + resultados provisionales, reordenada."""
+    pending = [r for r in collect_results(category, provisional_for, True) if r.provisional]
+    pending = not_yet_counted(category, pending)
+    if not pending:
+        return None
+    rule = points_rule(category)
+    rows = _official_rows(category, ours_key)
+    _apply_all(rows, missing_from_table(category), rule)
+    _apply_all(rows, pending, rule)
+    # A igualdad de puntos se respeta el orden oficial: así solo se mueve quien
+    # suma puntos (y a quien adelanta), sin aplicar desempates que pueden no ser
+    # exactamente los de la federación.
+    table = sorted(rows.values(), key=lambda row: (-row.points, row.official_position or 999, norm(row.team)))
+    return _table_out(table)
 
 
 def ours_key_of(category: Category, is_ours) -> Optional[str]:

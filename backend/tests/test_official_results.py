@@ -70,3 +70,24 @@ def test_points_rule_is_deduced_from_official_table(client):
         assert (rule(3, 1), rule(1, 3), rule(3, 0), rule(0, 3)) == (2, 1, 2, 1)
         # Con esa regla, la evolución reconstruida cuadra con la tabla oficial
         assert stats.evolution(c, None)["approximate"] is False
+
+
+def test_table_behind_calendar_is_updated_with_official_results(client):
+    """La web de la FVCL no actualiza su clasificación, pero el calendario ya trae los resultados oficiales."""
+    client.post("/api/admin/login", json={"password": "secreto"})
+    cat = client.post("/api/admin/categories", json={"name": "Infantil"}).json()
+    upload(client, cat["id"], RANKING_XLS, CALENDAR_J1_XLS)  # clasificación vieja (a cero) + calendario con la jornada 1
+    detail = client.get(f"/api/categories/{cat['slug']}").json()
+    assert detail["standings_missing"] == {"results": 2, "rounds": ["Jornada 1"]}
+    calc = {r["team"]: (r["points"], r["played"], r["won"], r["lost"], r["sets_for"], r["sets_against"]) for r in detail["standings_updated"]}
+
+    # Es exactamente lo que publica luego la federación
+    upload(client, cat["id"], RANKING_J1_XLS)
+    after = client.get(f"/api/categories/{cat['slug']}").json()
+    assert after["standings_updated"] is None and after["standings_missing"] is None
+    official = {s["team"]: (s["points"], s["played"], s["won"], s["lost"], s["sets_for"], s["sets_against"]) for s in after["standings"]}
+    assert calc == official
+    assert [r["team"] for r in detail["standings_updated"]][:2] == ["Maristas Inmaculada A", "VCV Castilla"]
+
+    # La portada ya usaba la posición actualizada de Ancares
+    assert detail["our_position"] == next(r["position"] for r in detail["standings_updated"] if r["is_ours"])

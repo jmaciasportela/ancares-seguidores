@@ -29,6 +29,16 @@
   const statsRes = $derived(hasProvisional ? resource(`/api/categories/${slug}/stats`) : null);
   const provisionalTable = $derived(statsRes ? $statsRes?.data?.provisional_table : null);
   let withProvisional = $state(false);
+  // La FVCL no ha sumado aún algunos resultados oficiales a su clasificación: la app los suma
+  let showOfficial = $state(false);
+  const updatedTable = $derived(data?.standings_updated && !showOfficial ? data.standings_updated : null);
+  const missingText = $derived.by(() => {
+    const m = data?.standings_missing;
+    if (!m) return '';
+    const rounds = m.rounds.map((r) => r.toLowerCase());
+    const list = rounds.length > 1 ? `${rounds.slice(0, -1).join(', ')} y ${rounds.at(-1)}` : rounds[0];
+    return `${m.results} ${m.results === 1 ? 'resultado' : 'resultados'} de la ${list}`;
+  });
 
   // Indicador de la pestaña activa: se mide porque las pestañas tienen anchos distintos
   let tabEls = $state([]);
@@ -197,7 +207,18 @@
                 <p class="prov-note">⏳ Clasificación orientativa con resultados aún sin confirmar por la federación.</p>
               {/if}
             {/if}
-            <StandingsTable standings={withProvisional && provisionalTable ? provisionalTable : data.standings} />
+            {#if data.standings_updated && !withProvisional}
+              <div class="upd-note">
+                {#if showOfficial}
+                  <p>Clasificación tal como la publica la federación (aún sin {missingText}).</p>
+                  <button class="linkish" onclick={() => (showOfficial = false)}>Ver la actualizada</button>
+                {:else}
+                  <p>🔄 La federación aún no ha sumado a su clasificación {missingText}. Esta tabla los incluye con la puntuación de la normativa (cálculo de la app).</p>
+                  <button class="linkish" onclick={() => (showOfficial = true)}>Ver la de la federación</button>
+                {/if}
+              </div>
+            {/if}
+            <StandingsTable standings={withProvisional && provisionalTable ? provisionalTable : updatedTable || data.standings} />
             <p class="legend muted">
               {#if data.points_system}<b>Pts:</b> {data.points_system.label}{:else}Pts: puntos{/if} · PJ: jugados · G: ganados · P: perdidos<span class="sets-legend"> · Sets: a favor - en contra</span>
             </p>
@@ -371,6 +392,24 @@
   .prov-note {
       color: #f5b94a;
     }
+  }
+  .upd-note {
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--brand-soft);
+    font-size: 13.5px;
+    line-height: 1.4;
+  }
+  .upd-note p {
+    margin: 0 0 4px;
+  }
+  .linkish {
+    padding: 0;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--brand-strong);
+    text-decoration: underline;
   }
   .legend {
     font-size: 12px;
